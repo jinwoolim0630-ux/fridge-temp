@@ -1,19 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 
 <head>
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>온도 점검</title>
+<title>온도 점검 시스템</title>
 
 <style>
 
 body{
-font-family:Arial;
+font-family: Arial;
 background:#f2f4f7;
-padding:15px;
+padding:20px;
 }
 
 .container{
@@ -76,13 +76,14 @@ font-weight:bold;
 
 <div id="userPage">
 
-<p>사용자 이름</p>
+<p>사용자 이름 입력</p>
 
 <input id="username" placeholder="이름 입력">
 
 <button onclick="saveUser()">다음</button>
 
 </div>
+
 
 <!-- 조제실 선택 -->
 
@@ -95,6 +96,7 @@ font-weight:bold;
 <button onclick="selectRoom('3층 항암조제실')">3층 항암조제실</button>
 
 </div>
+
 
 <!-- 장비 선택 -->
 
@@ -110,6 +112,7 @@ font-weight:bold;
 <button onclick="backRoom()">← 조제실 선택</button>
 
 </div>
+
 
 <!-- 온도 입력 -->
 
@@ -136,7 +139,7 @@ font-weight:bold;
 
 <script>
 
-const API_URL="https://script.google.com/macros/s/AKfycbxd2D9Sz95NNkx-lz6NC0dY_dJkX3cwgrRvhEpsb6fhKwkAr89knfcIw4qo-a1UKUZuGQ/exec"
+const API_URL="여기에_APPS_SCRIPT_URL"
 
 let user=""
 let room=""
@@ -156,6 +159,7 @@ document.getElementById("roomPage").classList.remove("hidden")
 
 }
 
+
 function selectRoom(r){
 
 room=r
@@ -166,6 +170,7 @@ document.getElementById("roomPage").classList.add("hidden")
 document.getElementById("devicePage").classList.remove("hidden")
 
 }
+
 
 function selectDevice(d){
 
@@ -178,6 +183,7 @@ document.getElementById("inputPage").classList.remove("hidden")
 
 }
 
+
 function backRoom(){
 
 document.getElementById("devicePage").classList.add("hidden")
@@ -185,12 +191,14 @@ document.getElementById("roomPage").classList.remove("hidden")
 
 }
 
+
 function backDevice(){
 
 document.getElementById("inputPage").classList.add("hidden")
 document.getElementById("devicePage").classList.remove("hidden")
 
 }
+
 
 function saveData(){
 
@@ -215,12 +223,9 @@ inspector:user
 
 fetch(API_URL,{
 method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
 body:JSON.stringify(data)
 })
-.then(res=>res.json())
+.then(res=>res.text())
 .then(res=>{
 document.getElementById("result").innerText="저장 완료"
 document.getElementById("temp").value=""
@@ -234,5 +239,4 @@ document.getElementById("result").innerText="저장 실패"
 </script>
 
 </body>
-
 </html>
