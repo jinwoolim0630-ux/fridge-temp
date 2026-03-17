@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>온도 점검 시스템</title>
+<title>온도 점검</title>
 
 <style>
 
@@ -25,11 +25,6 @@ border-radius:10px;
 box-shadow:0 0 10px rgba(0,0,0,0.1);
 }
 
-h2{
-text-align:center;
-margin-bottom:20px;
-}
-
 button{
 width:100%;
 padding:16px;
@@ -45,7 +40,7 @@ color:white;
 background:#4caf50;
 }
 
-input, select{
+input,select{
 width:100%;
 padding:14px;
 font-size:18px;
@@ -59,12 +54,6 @@ display:none;
 .status{
 font-size:14px;
 margin-top:5px;
-color:#333;
-}
-
-#result{
-margin-top:10px;
-font-weight:bold;
 }
 
 </style>
@@ -77,20 +66,16 @@ font-weight:bold;
 
 <h2>온도 점검</h2>
 
-<!-- 사용자 입력 -->
-
 <div id="userPage">
 
 <p>사용자 이름</p>
 
-<input id="username" placeholder="이름 입력">
+<input id="username">
 
 <button onclick="saveUser()">다음</button>
 
 </div>
 
-
-<!-- 조제실 선택 -->
 
 <div id="roomPage" class="hidden">
 
@@ -103,8 +88,6 @@ font-weight:bold;
 </div>
 
 
-<!-- 장비 목록 -->
-
 <div id="devicePage" class="hidden">
 
 <h3 id="roomTitle"></h3>
@@ -115,8 +98,6 @@ font-weight:bold;
 
 </div>
 
-
-<!-- 온도 입력 -->
 
 <div id="inputPage" class="hidden">
 
@@ -142,7 +123,7 @@ font-weight:bold;
 
 <script>
 
-const API_URL="https://script.google.com/macros/s/AKfycbwu3LEjzv7RRulDnfngUaqrkUS1a70rTLcJ4KHrS6hAv3MF52vMYguDSkBkzRy4NDQE/exec"
+const API_URL="여기에_APPS_SCRIPT_URL"
 
 let user=""
 let room=""
@@ -160,8 +141,8 @@ function saveUser(){
 
 user=document.getElementById("username").value
 
-if(user==""){
-alert("이름을 입력하세요")
+if(!user){
+alert("이름 입력")
 return
 }
 
@@ -180,7 +161,61 @@ document.getElementById("roomTitle").innerText=r
 document.getElementById("roomPage").classList.add("hidden")
 document.getElementById("devicePage").classList.remove("hidden")
 
+renderDeviceList({})
+
 loadStatus()
+
+}
+
+
+function renderDeviceList(data){
+
+let html=""
+
+devices.forEach(d=>{
+
+let morning="❌"
+let afternoon="❌"
+
+if(data[d]){
+
+if(data[d].morning) morning="✅"
+if(data[d].afternoon) afternoon="✅"
+
+}
+
+html+=`
+<button class="deviceBtn" onclick="selectDevice('${d}')">
+${d}
+<div class="status">오전 ${morning} / 오후 ${afternoon}</div>
+</button>
+`
+
+})
+
+document.getElementById("deviceList").innerHTML=html
+
+}
+
+
+function loadStatus(){
+
+fetch(API_URL+"?room="+encodeURIComponent(room))
+.then(res=>res.json())
+.then(data=>{
+
+console.log("API 응답",data)
+
+renderDeviceList(data)
+
+})
+.catch(err=>{
+
+console.log("API 오류",err)
+
+renderDeviceList({})
+
+})
 
 }
 
@@ -215,67 +250,13 @@ document.getElementById("inputPage").classList.remove("hidden")
 }
 
 
-function loadStatus(){
-
-fetch(API_URL+"?room="+encodeURIComponent(room))
-.then(res=>res.json())
-.then(data=>{
-
-let html=""
-
-devices.forEach(d=>{
-
-let morning="❌"
-let afternoon="❌"
-
-if(data && data[d]){
-
-if(data[d].morning) morning="✅"
-if(data[d].afternoon) afternoon="✅"
-
-}
-
-html+=`
-<button class="deviceBtn" onclick="selectDevice('${d}')">
-${d}
-<div class="status">오전 ${morning} / 오후 ${afternoon}</div>
-</button>
-`
-
-})
-
-document.getElementById("deviceList").innerHTML=html
-
-})
-.catch(err=>{
-
-let html=""
-
-devices.forEach(d=>{
-
-html+=`
-<button class="deviceBtn" onclick="selectDevice('${d}')">
-${d}
-<div class="status">오전 ❌ / 오후 ❌</div>
-</button>
-`
-
-})
-
-document.getElementById("deviceList").innerHTML=html
-
-})
-
-}
-
-
 function saveData(){
 
 let temp=document.getElementById("temp").value
 let time=document.getElementById("time").value
 
-if(temp==""){
-alert("온도를 입력하세요")
+if(!temp){
+alert("온도 입력")
 return
 }
 
