@@ -2,21 +2,22 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>온도 점검 기록</title>
+<title>온도 점검</title>
 
 <style>
+
 body{
 font-family:Arial;
-background:#f5f5f5;
+background:#f4f6f8;
 padding:30px;
 }
 
 .container{
-background:white;
-padding:20px;
-border-radius:10px;
-max-width:400px;
+max-width:420px;
 margin:auto;
+background:white;
+padding:25px;
+border-radius:10px;
 box-shadow:0 0 10px rgba(0,0,0,0.1);
 }
 
@@ -24,39 +25,32 @@ h2{
 text-align:center;
 }
 
-label{
-display:block;
-margin-top:15px;
-font-weight:bold;
-}
-
-input, select{
-width:100%;
-padding:10px;
-margin-top:5px;
-font-size:16px;
-}
-
 button{
-margin-top:20px;
 width:100%;
-padding:12px;
+padding:14px;
+margin-top:10px;
 font-size:16px;
+border:none;
+border-radius:6px;
 background:#2c7be5;
 color:white;
-border:none;
-border-radius:5px;
 }
 
 button:hover{
 background:#1a5ed6;
 }
 
-#result{
-margin-top:15px;
-text-align:center;
-font-weight:bold;
+input{
+width:100%;
+padding:10px;
+margin-top:10px;
+font-size:16px;
 }
+
+.hidden{
+display:none;
+}
+
 </style>
 
 </head>
@@ -65,66 +59,153 @@ font-weight:bold;
 
 <div class="container">
 
-<h2>온도 점검 기록</h2>
+<h2>온도 점검</h2>
 
-<label>측정 위치</label>
-<select id="location">
-<option value="fridge1">냉장고1</option>
-<option value="fridge2">냉장고2</option>
-<option value="fridge3">냉장고3</option>
-<option value="room">실내온도</option>
-</select>
+<!-- 사용자 입력 -->
 
-<label>온도 (℃)</label>
-<input type="number" id="temperature" step="0.1">
+<div id="userPage">
 
-<label>점검 시간</label>
+<p>사용자 이름</p>
+<input id="username" placeholder="이름 입력">
+
+<button onclick="saveUser()">다음</button>
+
+</div>
+
+<!-- 조제실 선택 -->
+
+<div id="roomPage" class="hidden">
+
+<p>조제실 선택</p>
+
+<button onclick="selectRoom('지하2층 병동약국')">지하2층 병동약국</button>
+<button onclick="selectRoom('0층 외래약국')">0층 외래약국</button>
+<button onclick="selectRoom('3층 항암조제실')">3층 항암조제실</button>
+
+</div>
+
+<!-- 장비 선택 -->
+
+<div id="devicePage" class="hidden">
+
+<p id="roomTitle"></p>
+
+<button onclick="selectDevice('냉장고1')">냉장고1</button>
+<button onclick="selectDevice('냉장고2')">냉장고2</button>
+<button onclick="selectDevice('냉장고3')">냉장고3</button>
+<button onclick="selectDevice('실내온도')">실내온도</button>
+
+<button onclick="backRoom()">← 조제실 선택으로</button>
+
+</div>
+
+<!-- 온도 입력 -->
+
+<div id="inputPage" class="hidden">
+
+<p id="deviceTitle"></p>
+
+<input id="temp" type="number" step="0.1" placeholder="온도 입력">
+
 <select id="time">
 <option value="오전">오전</option>
 <option value="오후">오후</option>
 </select>
 
-<label>점검자</label>
-<input type="text" id="inspector">
-
 <button onclick="saveData()">저장</button>
 
-<div id="result"></div>
+<button onclick="backDevice()">← 장비 선택</button>
+
+<p id="result"></p>
+
+</div>
 
 </div>
 
 <script>
 
-const API_URL = "https://script.google.com/macros/s/AKfycbyNaWh7TZyLjGQuIG0UNCOrQUKSCllBTIwm7SBojUIKzBKLE4ejRKLO7tM7Bbjg1iVdIw/exec";
+const API_URL="여기에_APPS_SCRIPT_URL";
+
+let user=""
+let room=""
+let device=""
+
+function saveUser(){
+
+user=document.getElementById("username").value
+
+if(user==""){
+alert("이름 입력")
+return
+}
+
+document.getElementById("userPage").classList.add("hidden")
+document.getElementById("roomPage").classList.remove("hidden")
+
+}
+
+function selectRoom(r){
+
+room=r
+
+document.getElementById("roomTitle").innerText=r
+
+document.getElementById("roomPage").classList.add("hidden")
+document.getElementById("devicePage").classList.remove("hidden")
+
+}
+
+function selectDevice(d){
+
+device=d
+
+document.getElementById("deviceTitle").innerText=room+" / "+d
+
+document.getElementById("devicePage").classList.add("hidden")
+document.getElementById("inputPage").classList.remove("hidden")
+
+}
+
+function backRoom(){
+
+document.getElementById("devicePage").classList.add("hidden")
+document.getElementById("roomPage").classList.remove("hidden")
+
+}
+
+function backDevice(){
+
+document.getElementById("inputPage").classList.add("hidden")
+document.getElementById("devicePage").classList.remove("hidden")
+
+}
 
 function saveData(){
 
-let location = document.getElementById("location").value;
-let temperature = document.getElementById("temperature").value;
-let time = document.getElementById("time").value;
-let inspector = document.getElementById("inspector").value;
+let temp=document.getElementById("temp").value
+let time=document.getElementById("time").value
 
-let today = new Date().toISOString().split("T")[0];
+let today=new Date().toISOString().split("T")[0]
 
-let data = {
-date: today,
-time: time,
-location: location,
-temperature: temperature,
-inspector: inspector
-};
+let data={
+date:today,
+time:time,
+location:room+"-"+device,
+temperature:temp,
+inspector:user
+}
 
 fetch(API_URL,{
 method:"POST",
 body:JSON.stringify(data)
 })
 .then(res=>res.json())
-.then(response=>{
-document.getElementById("result").innerHTML="저장 완료";
+.then(res=>{
+document.getElementById("result").innerText="저장 완료"
 })
-.catch(error=>{
-document.getElementById("result").innerHTML="저장 실패";
-});
+.catch(err=>{
+document.getElementById("result").innerText="저장 실패"
+})
 
 }
 
