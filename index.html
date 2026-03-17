@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>온도 점검</title>
+<title>온도 점검 시스템</title>
 
 <style>
 
@@ -25,6 +25,11 @@ border-radius:10px;
 box-shadow:0 0 10px rgba(0,0,0,0.1);
 }
 
+h2{
+text-align:center;
+margin-bottom:20px;
+}
+
 button{
 width:100%;
 padding:16px;
@@ -34,6 +39,10 @@ border:none;
 border-radius:8px;
 background:#2c7be5;
 color:white;
+}
+
+.deviceBtn{
+background:#4caf50;
 }
 
 input, select{
@@ -47,13 +56,15 @@ margin-top:10px;
 display:none;
 }
 
-.deviceBtn{
-background:#4caf50;
-}
-
 .status{
 font-size:14px;
-margin-top:3px;
+margin-top:5px;
+color:#333;
+}
+
+#result{
+margin-top:10px;
+font-weight:bold;
 }
 
 </style>
@@ -66,16 +77,20 @@ margin-top:3px;
 
 <h2>온도 점검</h2>
 
+<!-- 사용자 입력 -->
+
 <div id="userPage">
 
 <p>사용자 이름</p>
 
-<input id="username">
+<input id="username" placeholder="이름 입력">
 
 <button onclick="saveUser()">다음</button>
 
 </div>
 
+
+<!-- 조제실 선택 -->
 
 <div id="roomPage" class="hidden">
 
@@ -88,6 +103,8 @@ margin-top:3px;
 </div>
 
 
+<!-- 장비 목록 -->
+
 <div id="devicePage" class="hidden">
 
 <h3 id="roomTitle"></h3>
@@ -98,6 +115,8 @@ margin-top:3px;
 
 </div>
 
+
+<!-- 온도 입력 -->
 
 <div id="inputPage" class="hidden">
 
@@ -120,6 +139,7 @@ margin-top:3px;
 
 </div>
 
+
 <script>
 
 const API_URL="https://script.google.com/macros/s/AKfycbwu3LEjzv7RRulDnfngUaqrkUS1a70rTLcJ4KHrS6hAv3MF52vMYguDSkBkzRy4NDQE/exec"
@@ -135,12 +155,13 @@ const devices=[
 "실내온도"
 ]
 
+
 function saveUser(){
 
 user=document.getElementById("username").value
 
 if(user==""){
-alert("이름 입력")
+alert("이름을 입력하세요")
 return
 }
 
@@ -148,6 +169,7 @@ document.getElementById("userPage").classList.add("hidden")
 document.getElementById("roomPage").classList.remove("hidden")
 
 }
+
 
 function selectRoom(r){
 
@@ -162,12 +184,14 @@ loadStatus()
 
 }
 
+
 function backRoom(){
 
 document.getElementById("devicePage").classList.add("hidden")
 document.getElementById("roomPage").classList.remove("hidden")
 
 }
+
 
 function backDevice(){
 
@@ -177,6 +201,7 @@ document.getElementById("devicePage").classList.remove("hidden")
 loadStatus()
 
 }
+
 
 function selectDevice(d){
 
@@ -189,9 +214,10 @@ document.getElementById("inputPage").classList.remove("hidden")
 
 }
 
+
 function loadStatus(){
 
-fetch(API_URL+"?room="+room)
+fetch(API_URL+"?room="+encodeURIComponent(room))
 .then(res=>res.json())
 .then(data=>{
 
@@ -202,7 +228,7 @@ devices.forEach(d=>{
 let morning="❌"
 let afternoon="❌"
 
-if(data[d]){
+if(data && data[d]){
 
 if(data[d].morning) morning="✅"
 if(data[d].afternoon) afternoon="✅"
@@ -221,8 +247,27 @@ ${d}
 document.getElementById("deviceList").innerHTML=html
 
 })
+.catch(err=>{
+
+let html=""
+
+devices.forEach(d=>{
+
+html+=`
+<button class="deviceBtn" onclick="selectDevice('${d}')">
+${d}
+<div class="status">오전 ❌ / 오후 ❌</div>
+</button>
+`
+
+})
+
+document.getElementById("deviceList").innerHTML=html
+
+})
 
 }
+
 
 function saveData(){
 
@@ -230,7 +275,7 @@ let temp=document.getElementById("temp").value
 let time=document.getElementById("time").value
 
 if(temp==""){
-alert("온도 입력")
+alert("온도를 입력하세요")
 return
 }
 
@@ -253,7 +298,6 @@ body:JSON.stringify(data)
 .then(res=>{
 
 document.getElementById("result").innerText="저장 완료"
-
 document.getElementById("temp").value=""
 
 })
@@ -268,5 +312,4 @@ document.getElementById("result").innerText="저장 실패"
 </script>
 
 </body>
-
 </html>
