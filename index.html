@@ -6,12 +6,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>온도 점검 시스템</title>
+<title>온도 점검</title>
 
 <style>
 
 body{
-font-family: Arial;
+font-family:Arial;
 background:#f2f4f7;
 padding:20px;
 }
@@ -25,24 +25,15 @@ border-radius:10px;
 box-shadow:0 0 10px rgba(0,0,0,0.1);
 }
 
-h2{
-text-align:center;
-margin-bottom:20px;
-}
-
 button{
 width:100%;
 padding:16px;
-margin-top:12px;
+margin-top:10px;
 font-size:18px;
 border:none;
 border-radius:8px;
 background:#2c7be5;
 color:white;
-}
-
-button:hover{
-background:#1a5ed6;
 }
 
 input, select{
@@ -56,10 +47,13 @@ margin-top:10px;
 display:none;
 }
 
-#result{
-margin-top:15px;
-text-align:center;
-font-weight:bold;
+.deviceBtn{
+background:#4caf50;
+}
+
+.status{
+font-size:14px;
+margin-top:3px;
 }
 
 </style>
@@ -72,20 +66,16 @@ font-weight:bold;
 
 <h2>온도 점검</h2>
 
-<!-- 사용자 입력 -->
-
 <div id="userPage">
 
-<p>사용자 이름 입력</p>
+<p>사용자 이름</p>
 
-<input id="username" placeholder="이름 입력">
+<input id="username">
 
 <button onclick="saveUser()">다음</button>
 
 </div>
 
-
-<!-- 조제실 선택 -->
 
 <div id="roomPage" class="hidden">
 
@@ -98,27 +88,20 @@ font-weight:bold;
 </div>
 
 
-<!-- 장비 선택 -->
-
 <div id="devicePage" class="hidden">
 
-<p id="roomTitle"></p>
+<h3 id="roomTitle"></h3>
 
-<button onclick="selectDevice('냉장고1')">냉장고1</button>
-<button onclick="selectDevice('냉장고2')">냉장고2</button>
-<button onclick="selectDevice('냉장고3')">냉장고3</button>
-<button onclick="selectDevice('실내온도')">실내온도</button>
+<div id="deviceList"></div>
 
 <button onclick="backRoom()">← 조제실 선택</button>
 
 </div>
 
 
-<!-- 온도 입력 -->
-
 <div id="inputPage" class="hidden">
 
-<p id="deviceTitle"></p>
+<h3 id="deviceTitle"></h3>
 
 <input id="temp" type="number" step="0.1" placeholder="온도 입력">
 
@@ -129,7 +112,7 @@ font-weight:bold;
 
 <button onclick="saveData()">저장</button>
 
-<button onclick="backDevice()">← 장비 선택</button>
+<button onclick="backDevice()">← 장비 목록</button>
 
 <p id="result"></p>
 
@@ -139,18 +122,25 @@ font-weight:bold;
 
 <script>
 
-const API_URL="https://script.google.com/macros/s/AKfycbwu3LEjzv7RRulDnfngUaqrkUS1a70rTLcJ4KHrS6hAv3MF52vMYguDSkBkzRy4NDQE/exec"
+const API_URL="여기에_APPS_SCRIPT_URL"
 
 let user=""
 let room=""
 let device=""
 
+const devices=[
+"냉장고1",
+"냉장고2",
+"냉장고3",
+"실내온도"
+]
+
 function saveUser(){
 
 user=document.getElementById("username").value
 
-if(user===""){
-alert("이름을 입력하세요")
+if(user==""){
+alert("이름 입력")
 return
 }
 
@@ -158,7 +148,6 @@ document.getElementById("userPage").classList.add("hidden")
 document.getElementById("roomPage").classList.remove("hidden")
 
 }
-
 
 function selectRoom(r){
 
@@ -169,8 +158,25 @@ document.getElementById("roomTitle").innerText=r
 document.getElementById("roomPage").classList.add("hidden")
 document.getElementById("devicePage").classList.remove("hidden")
 
+loadStatus()
+
 }
 
+function backRoom(){
+
+document.getElementById("devicePage").classList.add("hidden")
+document.getElementById("roomPage").classList.remove("hidden")
+
+}
+
+function backDevice(){
+
+document.getElementById("inputPage").classList.add("hidden")
+document.getElementById("devicePage").classList.remove("hidden")
+
+loadStatus()
+
+}
 
 function selectDevice(d){
 
@@ -183,30 +189,48 @@ document.getElementById("inputPage").classList.remove("hidden")
 
 }
 
+function loadStatus(){
 
-function backRoom(){
+fetch(API_URL+"?room="+room)
+.then(res=>res.json())
+.then(data=>{
 
-document.getElementById("devicePage").classList.add("hidden")
-document.getElementById("roomPage").classList.remove("hidden")
+let html=""
+
+devices.forEach(d=>{
+
+let morning="❌"
+let afternoon="❌"
+
+if(data[d]){
+
+if(data[d].morning) morning="✅"
+if(data[d].afternoon) afternoon="✅"
 
 }
 
+html+=`
+<button class="deviceBtn" onclick="selectDevice('${d}')">
+${d}
+<div class="status">오전 ${morning} / 오후 ${afternoon}</div>
+</button>
+`
 
-function backDevice(){
+})
 
-document.getElementById("inputPage").classList.add("hidden")
-document.getElementById("devicePage").classList.remove("hidden")
+document.getElementById("deviceList").innerHTML=html
+
+})
 
 }
-
 
 function saveData(){
 
 let temp=document.getElementById("temp").value
 let time=document.getElementById("time").value
 
-if(temp===""){
-alert("온도를 입력하세요")
+if(temp==""){
+alert("온도 입력")
 return
 }
 
@@ -227,11 +251,16 @@ body:JSON.stringify(data)
 })
 .then(res=>res.text())
 .then(res=>{
+
 document.getElementById("result").innerText="저장 완료"
+
 document.getElementById("temp").value=""
+
 })
 .catch(err=>{
+
 document.getElementById("result").innerText="저장 실패"
+
 })
 
 }
@@ -239,4 +268,5 @@ document.getElementById("result").innerText="저장 실패"
 </script>
 
 </body>
+
 </html>
