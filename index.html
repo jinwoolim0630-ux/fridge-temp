@@ -1,15 +1,19 @@
 <!DOCTYPE html>
 <html>
+
 <head>
+
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>온도 점검</title>
 
 <style>
 
 body{
 font-family:Arial;
-background:#f4f6f8;
-padding:30px;
+background:#f2f4f7;
+padding:15px;
 }
 
 .container{
@@ -23,15 +27,16 @@ box-shadow:0 0 10px rgba(0,0,0,0.1);
 
 h2{
 text-align:center;
+margin-bottom:20px;
 }
 
 button{
 width:100%;
-padding:14px;
-margin-top:10px;
-font-size:16px;
+padding:16px;
+margin-top:12px;
+font-size:18px;
 border:none;
-border-radius:6px;
+border-radius:8px;
 background:#2c7be5;
 color:white;
 }
@@ -40,15 +45,21 @@ button:hover{
 background:#1a5ed6;
 }
 
-input{
+input, select{
 width:100%;
-padding:10px;
+padding:14px;
+font-size:18px;
 margin-top:10px;
-font-size:16px;
 }
 
 .hidden{
 display:none;
+}
+
+#result{
+margin-top:15px;
+text-align:center;
+font-weight:bold;
 }
 
 </style>
@@ -66,6 +77,7 @@ display:none;
 <div id="userPage">
 
 <p>사용자 이름</p>
+
 <input id="username" placeholder="이름 입력">
 
 <button onclick="saveUser()">다음</button>
@@ -95,7 +107,7 @@ display:none;
 <button onclick="selectDevice('냉장고3')">냉장고3</button>
 <button onclick="selectDevice('실내온도')">실내온도</button>
 
-<button onclick="backRoom()">← 조제실 선택으로</button>
+<button onclick="backRoom()">← 조제실 선택</button>
 
 </div>
 
@@ -124,7 +136,7 @@ display:none;
 
 <script>
 
-const API_URL="https://script.google.com/macros/s/AKfycbyNaWh7TZyLjGQuIG0UNCOrQUKSCllBTIwm7SBojUIKzBKLE4ejRKLO7tM7Bbjg1iVdIw/exec";
+const API_URL="여기에_APPS_SCRIPT_URL"
 
 let user=""
 let room=""
@@ -134,8 +146,8 @@ function saveUser(){
 
 user=document.getElementById("username").value
 
-if(user==""){
-alert("이름 입력")
+if(user===""){
+alert("이름을 입력하세요")
 return
 }
 
@@ -159,7 +171,7 @@ function selectDevice(d){
 
 device=d
 
-document.getElementById("deviceTitle").innerText=room+" / "+d
+document.getElementById("deviceTitle").innerText=room+" / "+device
 
 document.getElementById("devicePage").classList.add("hidden")
 document.getElementById("inputPage").classList.remove("hidden")
@@ -185,23 +197,33 @@ function saveData(){
 let temp=document.getElementById("temp").value
 let time=document.getElementById("time").value
 
+if(temp===""){
+alert("온도를 입력하세요")
+return
+}
+
 let today=new Date().toISOString().split("T")[0]
 
 let data={
 date:today,
 time:time,
-location:room+"-"+device,
+room:room,
+device:device,
 temperature:temp,
 inspector:user
 }
 
 fetch(API_URL,{
 method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
 body:JSON.stringify(data)
 })
 .then(res=>res.json())
 .then(res=>{
 document.getElementById("result").innerText="저장 완료"
+document.getElementById("temp").value=""
 })
 .catch(err=>{
 document.getElementById("result").innerText="저장 실패"
@@ -212,4 +234,5 @@ document.getElementById("result").innerText="저장 실패"
 </script>
 
 </body>
+
 </html>
