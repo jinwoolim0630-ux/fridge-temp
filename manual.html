@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>온도 점검 시스템 (병동약국 특화)</title>
+    <title>온도 점검 시스템 (연속저장 개선형)</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; margin: 0; padding: 15px; background: #f4f7f6; }
@@ -11,22 +11,13 @@
         h2 { text-align: center; color: #333; margin-top: 0; border-bottom: 3px solid #007bff; padding-bottom: 10px; }
         .label { font-size: 14px; color: #666; margin: 15px 0 5px; font-weight: bold; }
         input, button, select { width: 100%; padding: 15px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        
-        /* 버튼 스타일 */
         button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
         .btn-secondary { background: #6c757d; margin-top: 10px; }
         .hidden { display: none !important; }
-        
-        /* 장비 선택 그리드 */
         .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .device-card { 
-            padding: 15px; border: 1px solid #007bff; border-radius: 8px; 
-            text-align: center; background: #fff; cursor: pointer; 
-            font-weight: bold; color: #007bff; transition: 0.2s;
-        }
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; }
         .device-card:active { background: #007bff; color: #fff; }
         .section-title { grid-column: span 2; background: #e9ecef; padding: 5px; font-size: 13px; color: #495057; border-radius: 4px; margin-top: 10px; }
-
         #reader { width: 100%; border-radius: 10px; background: #000; overflow: hidden; margin-top: 10px; }
         .status-box { background: #eef7ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-weight: bold; border: 1px dashed #007bff; }
     </style>
@@ -39,166 +30,128 @@
     <div id="step-1">
         <div class="label">점검자 성함</div>
         <input type="text" id="userName" placeholder="이름을 입력하세요">
-        
         <div class="label">조제실 선택</div>
         <select id="roomSelect" onchange="updateDeviceList()">
             <option value="">-- 조제실을 선택하세요 --</option>
-            <option value="병동약국" selected>병동약국 (기본)</option>
+            <option value="병동약국" selected>병동약국</option>
             <option value="외래약국">외래약국</option>
             <option value="항암조제실">항암조제실</option>
         </select>
-
         <div id="device-list-area">
-            <div class="label">점검 대상 장비 선택 (병동약국 총 13종)</div>
-            <div id="device-grid" class="device-grid">
-                </div>
+            <div id="device-grid" class="device-grid"></div>
         </div>
     </div>
 
     <div id="step-2" class="hidden">
-        <div class="status-box">
-            현재 선택된 장비:<br>
-            <span id="selected-info" style="font-size: 20px; color: #007bff;"></span>
-        </div>
-        <p style="text-align:center; color: #666;">장비에 부착된 <b>QR코드</b>를 스캔하여 인증해 주세요.</p>
+        <div class="status-box">선택된 장비: <span id="selected-info"></span></div>
         <div id="reader"></div>
         <button class="btn-secondary" onclick="backToStep1()">이전 화면으로</button>
     </div>
 
     <div id="step-3" class="hidden">
-        <div class="status-box">
-            ✅ 인증 완료<br>
-            <span id="selected-info-final" style="font-size: 20px; color: #28a745;"></span>
-        </div>
-        
+        <div class="status-box">✅ 인증 완료: <span id="selected-info-final"></span></div>
         <div class="label">점검 회차</div>
-        <select id="checkTime">
-            <option value="오전">오전 점검</option>
-            <option value="오후">오후 점검</option>
-        </select>
-        
+        <select id="checkTime"><option value="오전">오전 점검</option><option value="오후">오후 점검</option></select>
         <div class="label">현재 온도 (℃)</div>
-        <input type="number" id="tempValue" step="0.1" inputmode="decimal" placeholder="숫자만 입력">
-        
-        <button id="submitBtn" onclick="submitData()">데이터 저장 및 완료</button>
+        <input type="number" id="tempValue" step="0.1" inputmode="decimal" placeholder="온도 입력">
+        <button id="submitBtn" onclick="submitData()">데이터 저장 및 다음 장비</button>
         <button class="btn-secondary" onclick="backToStep1()">취소</button>
     </div>
 </div>
 
 <script>
-    // [중요] 본인의 구글 앱스크립트 URL을 입력하세요
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwYpJ_AELXK_Tni7vOC5D9SRH98TNweFFT3oTUTrFlR241XMxbWb3bV0kPqgEgnHZ7y/exec";
     
-    // 조제실별 장비 리스트 데이터
     const devices = {
         "병동약국": {
             "냉장/냉동고": ["냉장고1", "냉장고2", "냉장고3", "냉장고4", "냉장고5", "냉장고6", "냉장고7", "냉장고8", "냉동고1"],
             "실내온도": ["실내온도1", "실내온도2", "실내온도3", "실내온도4"]
         },
-        "외래약국": { "장비": ["냉장고1", "실내온도1"] }, // 추후 수정 가능
-        "항암조제실": { "장비": ["냉장고1", "실내온도1"] }  // 추후 수정 가능
+        "외래약국": { "장비": ["냉장고1", "실내온도1"] },
+        "항암조제실": { "장비": ["냉장고1", "실내온도1"] }
     };
 
-    let selectedRoom = "";
-    let selectedDevice = "";
-    let html5QrCode;
+    let selectedRoom = "", selectedDevice = "", html5QrCode;
 
-    // 페이지 시작 시 이름 불러오기 및 기본 목록 생성
     document.addEventListener('DOMContentLoaded', () => {
         const savedName = localStorage.getItem('hospital_user_name');
         if (savedName) document.getElementById('userName').value = savedName;
-        updateDeviceList(); // 병동약국 목록 기본 표시
+        updateDeviceList();
     });
 
     function updateDeviceList() {
         const room = document.getElementById('roomSelect').value;
         const grid = document.getElementById('device-grid');
         if (!room) { grid.innerHTML = ""; return; }
-        
-        selectedRoom = room;
-        grid.innerHTML = "";
-        
+        selectedRoom = room; grid.innerHTML = "";
         const roomData = devices[room];
         for (const category in roomData) {
-            // 카테고리 제목 추가
-            const title = document.createElement('div');
-            title.className = 'section-title';
-            title.innerText = `● ${category}`;
-            grid.appendChild(title);
-
-            // 장비 버튼들 추가
+            const title = document.createElement('div'); title.className = 'section-title'; title.innerText = `● ${category}`; grid.appendChild(title);
             roomData[category].forEach(dev => {
-                const card = document.createElement('div');
-                card.className = 'device-card';
-                card.innerText = dev;
-                card.onclick = () => startScan(dev);
-                grid.appendChild(card);
+                const card = document.createElement('div'); card.className = 'device-card'; card.innerText = dev;
+                card.onclick = () => startScan(dev); grid.appendChild(card);
             });
         }
     }
 
     function startScan(device) {
         const user = document.getElementById('userName').value.trim();
-        if (!user) { alert("상단에 점검자 성함을 먼저 입력해주세요."); return; }
+        if (!user) { alert("성함을 입력해주세요."); return; }
         localStorage.setItem('hospital_user_name', user);
-        
         selectedDevice = device;
         document.getElementById('step-1').classList.add('hidden');
         document.getElementById('step-2').classList.remove('hidden');
-        document.getElementById('selected-info').innerText = `[${selectedRoom}] ${selectedDevice}`;
+        document.getElementById('selected-info').innerText = device;
         
         html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
-            // QR 인증: '조제실|장비명' 대조
             if (decodedText === `${selectedRoom}|${selectedDevice}`) {
-                html5QrCode.stop().then(() => {
-                    showInputScreen();
-                });
+                html5QrCode.stop().then(() => showInputScreen());
             } else {
-                alert(`인증 실패!\n현재 선택한 장비는 '${selectedDevice}'입니다.\n올바른 QR을 찍어주세요.`);
+                alert("QR 정보가 일치하지 않습니다.");
             }
-        }).catch(err => alert("카메라를 실행할 수 없습니다. 권한을 확인하세요."));
+        }).catch(() => alert("카메라를 켤 수 없습니다."));
     }
 
     function showInputScreen() {
         document.getElementById('step-2').classList.add('hidden');
         document.getElementById('step-3').classList.remove('hidden');
-        document.getElementById('selected-info-final').innerText = `[${selectedRoom}] ${selectedDevice}`;
+        document.getElementById('selected-info-final').innerText = selectedDevice;
+        document.getElementById('tempValue').focus();
     }
 
-    async function submitData() {
+    function submitData() {
         const temp = document.getElementById('tempValue').value;
         const checkTime = document.getElementById('checkTime').value;
         const user = document.getElementById('userName').value;
         const btn = document.getElementById('submitBtn');
 
-        if (!temp) { alert("온도 값을 입력해주세요."); return; }
+        if (!temp) { alert("온도를 입력하세요."); return; }
 
+        // 버튼 상태 변경
         btn.disabled = true;
         btn.innerText = "저장 중...";
 
         const payload = { user, room: selectedRoom, device: selectedDevice, temp, checkTime };
 
-        try {
-            await fetch(GAS_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/plain;charset=utf-8' },
-                body: JSON.stringify(payload)
-            });
-            alert("✅ 시트에 데이터가 성공적으로 전송되었습니다.");
-            backToStep1();
-        } catch (e) {
-            alert("네트워크 통신 오류가 발생했습니다.");
+        // 중요: 응답을 기다리지 않고(비동기) 실행한 뒤 바로 화면을 돌립니다.
+        fetch(GAS_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify(payload)
+        });
+
+        // 사용자 경험을 위해 가짜 딜레이를 약간 주고 바로 복구합니다.
+        setTimeout(() => {
+            alert(selectedDevice + " 데이터 전송 시도 완료!");
             btn.disabled = false;
-            btn.innerText = "데이터 저장 및 완료";
-        }
+            btn.innerText = "데이터 저장 및 다음 장비";
+            backToStep1();
+        }, 800); 
     }
 
     function backToStep1() {
-        if (html5QrCode && html5QrCode.isScanning) {
-            html5QrCode.stop();
-        }
+        if (html5QrCode && html5QrCode.isScanning) { html5QrCode.stop(); }
         document.getElementById('step-1').classList.remove('hidden');
         document.getElementById('step-2').classList.add('hidden');
         document.getElementById('step-3').classList.add('hidden');
