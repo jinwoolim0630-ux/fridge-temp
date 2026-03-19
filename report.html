@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>월간 온도 점검 보고서 출력</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* 인쇄 시 설정 */
+        @media print {
+            body { background-color: white; }
+            .no-print { display: none; }
+            .print-area {
+                width: 210mm;
+                height: 297mm;
+                margin: 0;
+                padding: 10mm;
+                box-shadow: none;
+            }
+            /* A4 한 장에 맞추기 위한 여백 조정 */
+            @page {
+                size: A4;
+                margin: 0;
+            }
+        }
+
+        .print-area {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 20px auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th, td {
+            border: 1px solid #000;
+            padding: 4px 2px;
+            text-align: center;
+            font-size: 12px;
+            height: 22px;
+        }
+
+        th {
+            background-color: #f8fafc;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-decoration: underline;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .approval-table {
+            width: 200px;
+            float: right;
+            margin-bottom: 10px;
+        }
+
+        .approval-table td {
+            height: 60px;
+            vertical-align: middle;
+        }
+
+        .info-grid {
+            clear: both;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .info-item {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 설정 영역 (인쇄 시 숨김) -->
+    <div class="no-print max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">보고서 출력 설정</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">조제실 선택</label>
+                <select id="roomSelect" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-gray-50" onchange="updateDevices()">
+                    <option value="">-- 조제실 선택 --</option>
+                    <option value="병동약국">병동약국</option>
+                    <option value="외래약국">외래약국</option>
+                    <option value="항암조제실">항암조제실</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">장비 선택</label>
+                <select id="deviceSelect" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-gray-50" onchange="renderReport()">
+                    <option value="">-- 조제실을 먼저 선택하세요 --</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">조회 년월</label>
+                <input type="month" id="monthInput" value="2024-03" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-gray-50" onchange="renderReport()">
+            </div>
+        </div>
+        <button onclick="window.print()" class="w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 transition font-bold">
+            📥 보고서 출력하기 (A4)
+        </button>
+    </div>
+
+    <!-- 보고서 출력 영역 -->
+    <div id="reportContent" class="print-area">
+        <div class="header-title">냉장고 온도 기록표</div>
+
+        <!-- 결재란 -->
+        <table class="approval-table">
+            <tr>
+                <td rowspan="2" style="width: 30px; background: #eee;">결<br>재</td>
+                <td style="height: 20px; background: #f9f9f9;">담당</td>
+                <td style="height: 20px; background: #f9f9f9;">약제부팀장</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td></td>
+            </tr>
+        </table>
+
+        <!-- 상단 정보 -->
+        <div class="info-grid">
+            <div class="info-item">조제실 : <span id="displayRoom" class="font-bold">-</span></div>
+            <div class="info-item">장비명 : <span id="displayDevice" class="font-bold">-</span></div>
+            <div class="info-item">Serial No. : <span id="displaySerial" class="font-bold">-</span></div>
+            <div class="info-item">기간 : <span id="displayPeriod" class="font-bold">-</span></div>
+        </div>
+
+        <!-- 메인 테이블 -->
+        <table>
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 15%;">날짜</th>
+                    <th colspan="2">오전</th>
+                    <th colspan="2">오후</th>
+                    <th rowspan="2">비고</th>
+                </tr>
+                <tr>
+                    <th style="width: 15%;">온도(℃)</th>
+                    <th style="width: 20%;">점검자</th>
+                    <th style="width: 15%;">온도(℃)</th>
+                    <th style="width: 20%;">점검자</th>
+                </tr>
+            </thead>
+            <tbody id="dataTableBody">
+                <!-- 데이터가 여기에 자바스크립트로 생성됩니다 -->
+            </tbody>
+        </table>
+
+        <div class="mt-4 text-xs text-right text-gray-500 italic no-print">
+            * 위 데이터는 시스템 기록을 기반으로 자동 생성되었습니다.
+        </div>
+    </div>
+
+    <script>
+        // 임시 데이터 (실제 서비스 시에는 구글 시트 API 등과 연동)
+        const deviceData = {
+            "병동약국": [
+                { name: "냉장고 1호기", sn: "SN-PHAR-001" },
+                { name: "냉장고 2호기", sn: "SN-PHAR-002" },
+                { name: "냉동고 1호기", sn: "SN-FREEZ-001" }
+            ],
+            "외래약국": [
+                { name: "외래냉장고 A", sn: "SN-OUT-A" },
+                { name: "외래냉장고 B", sn: "SN-OUT-B" }
+            ]
+        };
+
+        function updateDevices() {
+            const room = document.getElementById('roomSelect').value;
+            const deviceSelect = document.getElementById('deviceSelect');
+            deviceSelect.innerHTML = '<option value="">-- 장비 선택 --</option>';
+
+            if (room && deviceData[room]) {
+                deviceData[room].forEach(device => {
+                    const opt = document.createElement('option');
+                    opt.value = device.name;
+                    opt.textContent = device.name;
+                    opt.dataset.sn = device.sn;
+                    deviceSelect.appendChild(opt);
+                });
+            }
+            renderReport();
+        }
+
+        function renderReport() {
+            const room = document.getElementById('roomSelect').value || "-";
+            const deviceObj = document.getElementById('deviceSelect');
+            const deviceName = deviceObj.value || "-";
+            const serial = deviceObj.options[deviceObj.selectedIndex]?.dataset.sn || "-";
+            const period = document.getElementById('monthInput').value || "-";
+
+            // 상단 텍스트 업데이트
+            document.getElementById('displayRoom').textContent = room;
+            document.getElementById('displayDevice').textContent = deviceName;
+            document.getElementById('displaySerial').textContent = serial;
+            document.getElementById('displayPeriod').textContent = period;
+
+            // 표 데이터 생성 (31일까지)
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+
+            const [year, month] = period.split('-');
+            const daysInMonth = new Date(year, month, 0).getDate();
+
+            for (let d = 1; d <= 31; d++) {
+                const tr = document.createElement('tr');
+                const dateStr = d <= daysInMonth ? `${month}-${String(d).padStart(2, '0')}` : "";
+                
+                // 가짜 데이터 생성 (실제 구현 시 API 데이터 매핑)
+                const tempAM = d <= daysInMonth ? (Math.random() * (6 - 3) + 3).toFixed(1) : "";
+                const userAM = d <= daysInMonth ? "김철수" : "";
+                const tempPM = d <= daysInMonth ? (Math.random() * (6 - 3) + 3).toFixed(1) : "";
+                const userPM = d <= daysInMonth ? "이영희" : "";
+
+                tr.innerHTML = `
+                    <td>${dateStr}</td>
+                    <td>${tempAM}</td>
+                    <td>${userAM}</td>
+                    <td>${tempPM}</td>
+                    <td>${userPM}</td>
+                    <td>${d <= daysInMonth ? '정상' : ''}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        // 초기 실행
+        window.onload = renderReport;
+    </script>
+</body>
+</html>
