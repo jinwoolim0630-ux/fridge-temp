@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>온도 점검 시스템 (연속저장 개선형)</title>
+    <title>온도 점검 시스템 (실시간 동기화형)</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; margin: 0; padding: 15px; background: #f4f7f6; }
@@ -15,8 +15,21 @@
         .btn-secondary { background: #6c757d; margin-top: 10px; }
         .hidden { display: none !important; }
         .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; }
-        .device-card:active { background: #007bff; color: #fff; }
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; transition: all 0.3s; }
+        
+        /* 점검 완료 스타일 */
+        .device-card.completed {
+            background: #28a745 !important; 
+            color: white !important;
+            border-color: #1e7e34 !important;
+        }
+        .device-card.completed::after {
+            content: " (완료)";
+            font-size: 11px;
+            display: block;
+            margin-top: 4px;
+        }
+
         .section-title { grid-column: span 2; background: #e9ecef; padding: 5px; font-size: 13px; color: #495057; border-radius: 4px; margin-top: 10px; }
         #reader { width: 100%; border-radius: 10px; background: #000; overflow: hidden; margin-top: 10px; }
         .status-box { background: #eef7ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-weight: bold; border: 1px dashed #007bff; }
@@ -30,16 +43,25 @@
     <div id="step-1">
         <div class="label">점검자 성함</div>
         <input type="text" id="userName" placeholder="이름을 입력하세요">
+        
+        <div class="label">점검 회차 선택</div>
+        <select id="checkTime" onchange="updateDeviceList()">
+            <option value="오전">오전 점검</option>
+            <option value="오후">오후 점검</option>
+        </select>
+
         <div class="label">조제실 선택</div>
         <select id="roomSelect" onchange="updateDeviceList()">
-            <option value="">-- 조제실을 선택하세요 --</option>
             <option value="병동약국" selected>병동약국</option>
             <option value="외래약국">외래약국</option>
             <option value="항암조제실">항암조제실</option>
         </select>
+
         <div id="device-list-area">
             <div id="device-grid" class="device-grid"></div>
         </div>
+        
+        <button class="btn-secondary" onclick="fetchStatus()">목록 새로고침</button>
     </div>
 
     <div id="step-2" class="hidden">
@@ -50,16 +72,15 @@
 
     <div id="step-3" class="hidden">
         <div class="status-box">✅ 인증 완료: <span id="selected-info-final"></span></div>
-        <div class="label">점검 회차</div>
-        <select id="checkTime"><option value="오전">오전 점검</option><option value="오후">오후 점검</option></select>
         <div class="label">현재 온도 (℃)</div>
         <input type="number" id="tempValue" step="0.1" inputmode="decimal" placeholder="온도 입력">
-        <button id="submitBtn" onclick="submitData()">데이터 저장 및 다음 장비</button>
+        <button id="submitBtn" onclick="submitData()">데이터 저장 및 완료</button>
         <button class="btn-secondary" onclick="backToStep1()">취소</button>
     </div>
 </div>
 
 <script>
+    // 배포한 구글 앱스 스크립트 URL을 여기에 붙여넣으세요
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwYpJ_AELXK_Tni7vOC5D9SRH98TNweFFT3oTUTrFlR241XMxbWb3bV0kPqgEgnHZ7y/exec";
     
     const devices = {
@@ -72,24 +93,55 @@
     };
 
     let selectedRoom = "", selectedDevice = "", html5QrCode;
+    let completedItems = []; // 서버에서 받아온 오늘 완료 목록
 
     document.addEventListener('DOMContentLoaded', () => {
         const savedName = localStorage.getItem('hospital_user_name');
         if (savedName) document.getElementById('userName').value = savedName;
-        updateDeviceList();
+        
+        fetchStatus(); // 페이지 로드 시 실시간 데이터 확인
     });
+
+    // 서버로부터 오늘 점검 완료된 목록 가져오기
+    async function fetchStatus() {
+        try {
+            const response = await fetch(GAS_URL);
+            if (!response.ok) throw new Error('Network response was not ok');
+            completedItems = await response.json(); 
+            updateDeviceList();
+        } catch (e) {
+            console.error("데이터 동기화 실패:", e);
+            updateDeviceList(); // 실패하더라도 목록은 표시
+        }
+    }
 
     function updateDeviceList() {
         const room = document.getElementById('roomSelect').value;
         const grid = document.getElementById('device-grid');
+        const checkTime = document.getElementById('checkTime').value;
+        
         if (!room) { grid.innerHTML = ""; return; }
         selectedRoom = room; grid.innerHTML = "";
+        
         const roomData = devices[room];
         for (const category in roomData) {
-            const title = document.createElement('div'); title.className = 'section-title'; title.innerText = `● ${category}`; grid.appendChild(title);
+            const title = document.createElement('div'); 
+            title.className = 'section-title'; 
+            title.innerText = `● ${category}`; 
+            grid.appendChild(title);
+
             roomData[category].forEach(dev => {
-                const card = document.createElement('div'); card.className = 'device-card'; card.innerText = dev;
-                card.onclick = () => startScan(dev); grid.appendChild(card);
+                const card = document.createElement('div'); 
+                card.className = 'device-card'; 
+                card.innerText = dev;
+                
+                // 서버 데이터와 비교하여 완료 표시 (조제실|장비명|회차)
+                if (completedItems.includes(`${room}|${dev}|${checkTime}`)) {
+                    card.classList.add('completed');
+                }
+                
+                card.onclick = () => startScan(dev); 
+                grid.appendChild(card);
             });
         }
     }
@@ -98,6 +150,7 @@
         const user = document.getElementById('userName').value.trim();
         if (!user) { alert("성함을 입력해주세요."); return; }
         localStorage.setItem('hospital_user_name', user);
+        
         selectedDevice = device;
         document.getElementById('step-1').classList.add('hidden');
         document.getElementById('step-2').classList.remove('hidden');
@@ -105,10 +158,11 @@
         
         html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+            // QR 데이터 형식이 "조제실|장비명"인 경우 인증 성공
             if (decodedText === `${selectedRoom}|${selectedDevice}`) {
                 html5QrCode.stop().then(() => showInputScreen());
             } else {
-                alert("QR 정보가 일치하지 않습니다.");
+                alert("QR 정보가 일치하지 않습니다.\n대상: " + selectedRoom + " " + selectedDevice);
             }
         }).catch(() => alert("카메라를 켤 수 없습니다."));
     }
@@ -120,7 +174,7 @@
         document.getElementById('tempValue').focus();
     }
 
-    function submitData() {
+    async function submitData() {
         const temp = document.getElementById('tempValue').value;
         const checkTime = document.getElementById('checkTime').value;
         const user = document.getElementById('userName').value;
@@ -128,26 +182,31 @@
 
         if (!temp) { alert("온도를 입력하세요."); return; }
 
-        // 버튼 상태 변경
         btn.disabled = true;
         btn.innerText = "저장 중...";
 
         const payload = { user, room: selectedRoom, device: selectedDevice, temp, checkTime };
 
-        // 중요: 응답을 기다리지 않고(비동기) 실행한 뒤 바로 화면을 돌립니다.
-        fetch(GAS_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify(payload)
-        });
+        // 데이터 전송 (POST)
+        try {
+            await fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(payload)
+            });
 
-        // 사용자 경험을 위해 가짜 딜레이를 약간 주고 바로 복구합니다.
-        setTimeout(() => {
-            alert(selectedDevice + " 데이터 전송 시도 완료!");
+            // 즉시 완료 목록에 추가하여 화면 갱신 없이도 반영되게 함
+            completedItems.push(`${selectedRoom}|${selectedDevice}|${checkTime}`);
+            
+            alert(selectedDevice + " 데이터 전송 완료!");
             btn.disabled = false;
-            btn.innerText = "데이터 저장 및 다음 장비";
+            btn.innerText = "데이터 저장 및 완료";
             backToStep1();
-        }, 800); 
+            updateDeviceList(); // 완료 상태 즉시 반영
+        } catch (e) {
+            alert("전송 중 오류가 발생했습니다.");
+            btn.disabled = false;
+        }
     }
 
     function backToStep1() {
