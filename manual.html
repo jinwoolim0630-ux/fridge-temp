@@ -15,20 +15,21 @@
         .btn-secondary { background: #6c757d; margin-top: 10px; }
         .hidden { display: none !important; }
         .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; position: relative; }
         
-        /* 점검 완료 스타일: 초록색 배경 및 문구 추가 */
+        /* 장비 카드 기본 스타일 */
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; }
+        
+        /* 점검 완료 시 스타일 (초록색) */
         .device-card.completed {
             background: #28a745 !important;
             color: white !important;
             border-color: #1e7e34 !important;
         }
         .device-card.completed::after {
-            content: "✓ 점검완료";
+            content: " (점검완료)";
             display: block;
             font-size: 10px;
-            margin-top: 5px;
-            opacity: 0.9;
+            margin-top: 4px;
         }
 
         .section-title { grid-column: span 2; background: #e9ecef; padding: 5px; font-size: 13px; color: #495057; border-radius: 4px; margin-top: 10px; }
@@ -45,7 +46,7 @@
         <div class="label">점검자 성함</div>
         <input type="text" id="userName" placeholder="이름을 입력하세요">
         
-        <div class="label">점검 회차 (오전/오후 선택)</div>
+        <div class="label">점검 회차 선택</div>
         <select id="checkTime" onchange="updateDeviceList()">
             <option value="오전">오전 점검</option>
             <option value="오후">오후 점검</option>
@@ -62,27 +63,27 @@
             <div id="device-grid" class="device-grid"></div>
         </div>
         
-        <button class="btn-secondary" onclick="fetchStatus()">🔄 점검 상태 새로고침</button>
+        <button class="btn-secondary" style="margin-top:20px;" onclick="fetchStatus()">🔄 상태 새로고침</button>
     </div>
 
     <div id="step-2" class="hidden">
-        <div class="status-box">선택된 장비: <span id="selected-info"></span></div>
+        <div class="status-box">대상: <span id="selected-info"></span></div>
         <div id="reader"></div>
-        <button class="btn-secondary" onclick="backToStep1()">이전 화면으로</button>
+        <button class="btn-secondary" onclick="backToStep1()">취소하고 돌아가기</button>
     </div>
 
     <div id="step-3" class="hidden">
-        <div class="status-box">✅ 인증 완료: <span id="selected-info-final"></span></div>
+        <div class="status-box">✅ 인증 성공: <span id="selected-info-final"></span></div>
         <div class="label">현재 온도 (℃)</div>
-        <input type="number" id="tempValue" step="0.1" inputmode="decimal" placeholder="온도 입력">
-        <button id="submitBtn" onclick="submitData()">데이터 저장 및 완료</button>
+        <input type="number" id="tempValue" step="0.1" inputmode="decimal" placeholder="0.0">
+        <button id="submitBtn" onclick="submitData()">데이터 저장 완료</button>
         <button class="btn-secondary" onclick="backToStep1()">취소</button>
     </div>
 </div>
 
 <script>
-    // 배포한 구글 앱스 스크립트 URL을 반드시 확인하세요
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwBhqH5uR-8jPOj5VUO5jZ3HDEOzcmL3AmxWdyqGNOzvz1RK-fEaVe2qP95EJvAmOKL/exec";
+    // 배포한 GAS 웹 앱 URL
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwYpJ_AELXK_Tni7vOC5D9SRH98TNweFFT3oTUTrFlR241XMxbWb3bV0kPqgEgnHZ7y/exec";
     
     const devices = {
         "병동약국": {
@@ -94,61 +95,83 @@
     };
 
     let selectedRoom = "", selectedDevice = "", html5QrCode;
-    let completedItems = []; // 서버에서 받아온 완료 목록 저장 변수
+    let completedItems = []; // 서버에서 받아온 오늘 완료 목록
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         const savedName = localStorage.getItem('hospital_user_name');
         if (savedName) document.getElementById('userName').value = savedName;
         
-        fetchStatus(); // 페이지 로드 시 즉시 서버 데이터 조회
+        // 시작하자마자 서버에서 오늘 기록을 가져옵니다.
+        await fetchStatus();
     });
 
-    // 서버(구글 시트)에서 오늘 점검된 목록 가져오기
     async function fetchStatus() {
         try {
             const response = await fetch(GAS_URL);
-            if (!response.ok) throw new Error('서버 응답 없음');
-            completedItems = await response.json(); // 서버에서 ["조제실|장비|회차", ...] 형태 수신
+            completedItems = await response.json(); // ["조제실|장비|회차", ...] 형태
             updateDeviceList();
         } catch (e) {
-            console.error("데이터 동기화 실패:", e);
-            updateDeviceList(); 
+            console.error("데이터 동기화 실패", e);
+            updateDeviceList();
         }
     }
 
     function updateDeviceList() {
         const room = document.getElementById('roomSelect').value;
         const grid = document.getElementById('device-grid');
-        const checkTime = document.getElementById('checkTime').value; // 현재 선택된 오전/오후
-        
+        const checkTime = document.getElementById('checkTime').value;
+
         if (!room) { grid.innerHTML = ""; return; }
         selectedRoom = room; grid.innerHTML = "";
         
         const roomData = devices[room];
         for (const category in roomData) {
-            const title = document.createElement('div'); 
-            title.className = 'section-title'; 
-            title.innerText = `● ${category}`; 
+            const title = document.createElement('div');
+            title.className = 'section-title';
+            title.innerText = `● ${category}`;
             grid.appendChild(title);
-
+            
             roomData[category].forEach(dev => {
-                const card = document.createElement('div'); 
-                card.className = 'device-card'; 
+                const card = document.createElement('div');
+                card.className = 'device-card';
+                
+                // 오늘 이 회차에 점검 기록이 있는지 확인
+                const isDone = completedItems.includes(`${room}|${dev}|${checkTime}`);
+                if (isDone) card.classList.add('completed');
+                
                 card.innerText = dev;
-                
-                // 현재 회차(오전/오후)에 완료된 기록이 있는지 대조
-                const itemKey = `${room}|${dev}|${checkTime}`;
-                if (completedItems.includes(itemKey)) {
-                    card.classList.add('completed');
-                }
-                
-                card.onclick = () => startScan(dev); 
+                card.onclick = () => startScan(dev);
                 grid.appendChild(card);
             });
         }
     }
 
-    // ... (startScan, showInputScreen, backToStep1 함수는 기존과 동일)
+    function startScan(device) {
+        const user = document.getElementById('userName').value.trim();
+        if (!user) { alert("성함을 입력해주세요."); return; }
+        localStorage.setItem('hospital_user_name', user);
+        
+        selectedDevice = device;
+        document.getElementById('step-1').classList.add('hidden');
+        document.getElementById('step-2').classList.remove('hidden');
+        document.getElementById('selected-info').innerText = device;
+        
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+            if (decodedText === `${selectedRoom}|${selectedDevice}`) {
+                html5QrCode.stop().then(() => showInputScreen());
+            } else {
+                alert("QR 코드가 일치하지 않습니다.");
+            }
+        }).catch(() => alert("카메라를 사용할 수 없습니다."));
+    }
+
+    function showInputScreen() {
+        document.getElementById('step-2').classList.add('hidden');
+        document.getElementById('step-3').classList.remove('hidden');
+        document.getElementById('selected-info-final').innerText = selectedDevice;
+        document.getElementById('tempValue').focus();
+    }
 
     async function submitData() {
         const temp = document.getElementById('tempValue').value;
@@ -164,49 +187,26 @@
         const payload = { user, room: selectedRoom, device: selectedDevice, temp, checkTime };
 
         try {
-            // 데이터 저장 (POST)
             await fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 body: JSON.stringify(payload)
             });
 
-            // 저장 직후 로컬 목록에도 추가하여 즉시 반영
+            // 저장 직후 목록에 추가하여 즉시 반영
             completedItems.push(`${selectedRoom}|${selectedDevice}|${checkTime}`);
             
-            alert(selectedDevice + " (" + checkTime + ") 점검 완료!");
+            alert(selectedDevice + " 저장 완료!");
             btn.disabled = false;
-            btn.innerText = "데이터 저장 및 완료";
+            btn.innerText = "데이터 저장 완료";
             backToStep1();
-            updateDeviceList(); 
+            updateDeviceList();
         } catch (e) {
-            alert("전송 중 오류가 발생했습니다.");
+            alert("전송 오류 발생");
             btn.disabled = false;
         }
     }
-    
-    // 기존 QR 스캔 로직들...
-    function startScan(device) {
-        const user = document.getElementById('userName').value.trim();
-        if (!user) { alert("성함을 입력해주세요."); return; }
-        localStorage.setItem('hospital_user_name', user);
-        selectedDevice = device;
-        document.getElementById('step-1').classList.add('hidden');
-        document.getElementById('step-2').classList.remove('hidden');
-        document.getElementById('selected-info').innerText = device;
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
-            if (decodedText === `${selectedRoom}|${selectedDevice}`) {
-                html5QrCode.stop().then(() => showInputScreen());
-            } else { alert("QR 정보가 일치하지 않습니다."); }
-        }).catch(() => alert("카메라 오류"));
-    }
-    function showInputScreen() {
-        document.getElementById('step-2').classList.add('hidden');
-        document.getElementById('step-3').classList.remove('hidden');
-        document.getElementById('selected-info-final').innerText = selectedDevice;
-        document.getElementById('tempValue').focus();
-    }
+
     function backToStep1() {
         if (html5QrCode && html5QrCode.isScanning) { html5QrCode.stop(); }
         document.getElementById('step-1').classList.remove('hidden');
