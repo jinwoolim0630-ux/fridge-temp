@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>온도 점검 시스템 (실시간 동기화형)</title>
+    <title>온도 점검 시스템 (실시간 동기화)</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; margin: 0; padding: 15px; background: #f4f7f6; }
@@ -15,19 +15,20 @@
         .btn-secondary { background: #6c757d; margin-top: 10px; }
         .hidden { display: none !important; }
         .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; transition: all 0.3s; }
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; position: relative; }
         
-        /* 점검 완료 스타일 */
+        /* 점검 완료 스타일: 초록색 배경 및 문구 추가 */
         .device-card.completed {
-            background: #28a745 !important; 
+            background: #28a745 !important;
             color: white !important;
             border-color: #1e7e34 !important;
         }
         .device-card.completed::after {
-            content: " (완료)";
-            font-size: 11px;
+            content: "✓ 점검완료";
             display: block;
-            margin-top: 4px;
+            font-size: 10px;
+            margin-top: 5px;
+            opacity: 0.9;
         }
 
         .section-title { grid-column: span 2; background: #e9ecef; padding: 5px; font-size: 13px; color: #495057; border-radius: 4px; margin-top: 10px; }
@@ -44,7 +45,7 @@
         <div class="label">점검자 성함</div>
         <input type="text" id="userName" placeholder="이름을 입력하세요">
         
-        <div class="label">점검 회차 선택</div>
+        <div class="label">점검 회차 (오전/오후 선택)</div>
         <select id="checkTime" onchange="updateDeviceList()">
             <option value="오전">오전 점검</option>
             <option value="오후">오후 점검</option>
@@ -61,7 +62,7 @@
             <div id="device-grid" class="device-grid"></div>
         </div>
         
-        <button class="btn-secondary" onclick="fetchStatus()">목록 새로고침</button>
+        <button class="btn-secondary" onclick="fetchStatus()">🔄 점검 상태 새로고침</button>
     </div>
 
     <div id="step-2" class="hidden">
@@ -80,7 +81,7 @@
 </div>
 
 <script>
-    // 배포한 구글 앱스 스크립트 URL을 여기에 붙여넣으세요
+    // 배포한 구글 앱스 스크립트 URL을 반드시 확인하세요
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwYpJ_AELXK_Tni7vOC5D9SRH98TNweFFT3oTUTrFlR241XMxbWb3bV0kPqgEgnHZ7y/exec";
     
     const devices = {
@@ -93,32 +94,32 @@
     };
 
     let selectedRoom = "", selectedDevice = "", html5QrCode;
-    let completedItems = []; // 서버에서 받아온 오늘 완료 목록
+    let completedItems = []; // 서버에서 받아온 완료 목록 저장 변수
 
     document.addEventListener('DOMContentLoaded', () => {
         const savedName = localStorage.getItem('hospital_user_name');
         if (savedName) document.getElementById('userName').value = savedName;
         
-        fetchStatus(); // 페이지 로드 시 실시간 데이터 확인
+        fetchStatus(); // 페이지 로드 시 즉시 서버 데이터 조회
     });
 
-    // 서버로부터 오늘 점검 완료된 목록 가져오기
+    // 서버(구글 시트)에서 오늘 점검된 목록 가져오기
     async function fetchStatus() {
         try {
             const response = await fetch(GAS_URL);
-            if (!response.ok) throw new Error('Network response was not ok');
-            completedItems = await response.json(); 
+            if (!response.ok) throw new Error('서버 응답 없음');
+            completedItems = await response.json(); // 서버에서 ["조제실|장비|회차", ...] 형태 수신
             updateDeviceList();
         } catch (e) {
             console.error("데이터 동기화 실패:", e);
-            updateDeviceList(); // 실패하더라도 목록은 표시
+            updateDeviceList(); 
         }
     }
 
     function updateDeviceList() {
         const room = document.getElementById('roomSelect').value;
         const grid = document.getElementById('device-grid');
-        const checkTime = document.getElementById('checkTime').value;
+        const checkTime = document.getElementById('checkTime').value; // 현재 선택된 오전/오후
         
         if (!room) { grid.innerHTML = ""; return; }
         selectedRoom = room; grid.innerHTML = "";
@@ -135,8 +136,9 @@
                 card.className = 'device-card'; 
                 card.innerText = dev;
                 
-                // 서버 데이터와 비교하여 완료 표시 (조제실|장비명|회차)
-                if (completedItems.includes(`${room}|${dev}|${checkTime}`)) {
+                // 현재 회차(오전/오후)에 완료된 기록이 있는지 대조
+                const itemKey = `${room}|${dev}|${checkTime}`;
+                if (completedItems.includes(itemKey)) {
                     card.classList.add('completed');
                 }
                 
@@ -146,33 +148,7 @@
         }
     }
 
-    function startScan(device) {
-        const user = document.getElementById('userName').value.trim();
-        if (!user) { alert("성함을 입력해주세요."); return; }
-        localStorage.setItem('hospital_user_name', user);
-        
-        selectedDevice = device;
-        document.getElementById('step-1').classList.add('hidden');
-        document.getElementById('step-2').classList.remove('hidden');
-        document.getElementById('selected-info').innerText = device;
-        
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
-            // QR 데이터 형식이 "조제실|장비명"인 경우 인증 성공
-            if (decodedText === `${selectedRoom}|${selectedDevice}`) {
-                html5QrCode.stop().then(() => showInputScreen());
-            } else {
-                alert("QR 정보가 일치하지 않습니다.\n대상: " + selectedRoom + " " + selectedDevice);
-            }
-        }).catch(() => alert("카메라를 켤 수 없습니다."));
-    }
-
-    function showInputScreen() {
-        document.getElementById('step-2').classList.add('hidden');
-        document.getElementById('step-3').classList.remove('hidden');
-        document.getElementById('selected-info-final').innerText = selectedDevice;
-        document.getElementById('tempValue').focus();
-    }
+    // ... (startScan, showInputScreen, backToStep1 함수는 기존과 동일)
 
     async function submitData() {
         const temp = document.getElementById('tempValue').value;
@@ -187,28 +163,50 @@
 
         const payload = { user, room: selectedRoom, device: selectedDevice, temp, checkTime };
 
-        // 데이터 전송 (POST)
         try {
+            // 데이터 저장 (POST)
             await fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 body: JSON.stringify(payload)
             });
 
-            // 즉시 완료 목록에 추가하여 화면 갱신 없이도 반영되게 함
+            // 저장 직후 로컬 목록에도 추가하여 즉시 반영
             completedItems.push(`${selectedRoom}|${selectedDevice}|${checkTime}`);
             
-            alert(selectedDevice + " 데이터 전송 완료!");
+            alert(selectedDevice + " (" + checkTime + ") 점검 완료!");
             btn.disabled = false;
             btn.innerText = "데이터 저장 및 완료";
             backToStep1();
-            updateDeviceList(); // 완료 상태 즉시 반영
+            updateDeviceList(); 
         } catch (e) {
             alert("전송 중 오류가 발생했습니다.");
             btn.disabled = false;
         }
     }
-
+    
+    // 기존 QR 스캔 로직들...
+    function startScan(device) {
+        const user = document.getElementById('userName').value.trim();
+        if (!user) { alert("성함을 입력해주세요."); return; }
+        localStorage.setItem('hospital_user_name', user);
+        selectedDevice = device;
+        document.getElementById('step-1').classList.add('hidden');
+        document.getElementById('step-2').classList.remove('hidden');
+        document.getElementById('selected-info').innerText = device;
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+            if (decodedText === `${selectedRoom}|${selectedDevice}`) {
+                html5QrCode.stop().then(() => showInputScreen());
+            } else { alert("QR 정보가 일치하지 않습니다."); }
+        }).catch(() => alert("카메라 오류"));
+    }
+    function showInputScreen() {
+        document.getElementById('step-2').classList.add('hidden');
+        document.getElementById('step-3').classList.remove('hidden');
+        document.getElementById('selected-info-final').innerText = selectedDevice;
+        document.getElementById('tempValue').focus();
+    }
     function backToStep1() {
         if (html5QrCode && html5QrCode.isScanning) { html5QrCode.stop(); }
         document.getElementById('step-1').classList.remove('hidden');
