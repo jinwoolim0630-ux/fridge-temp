@@ -22,17 +22,18 @@
             overflow: auto; 
             border-radius: 8px; 
             border: 1px solid #e9ecef; 
-            max-height: 65vh; /* 화면 높이의 65%까지만 차지하도록 제한 */
+            max-height: 70vh; /* 화면 높이에 맞춰 조절 */
         }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1200px; }
         
-        /* 열 너비 고정 */
-        th, td { border: 1px solid #e9ecef; padding: 6px 4px; text-align: center; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* 열 너비 고정 및 텍스트 정렬 */
+        th, td { border: 1px solid #e9ecef; padding: 8px 4px; text-align: center; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         th { background: #f8f9fa; color: #495057; position: sticky; top: 0; z-index: 20; }
         
-        .date-col { background: #f1f3f5; font-weight: 600; width: 90px; position: sticky; left: 0; z-index: 10; }
+        /* 날짜 열 고정 */
+        .date-col { background: #f1f3f5; font-weight: 600; width: 100px; position: sticky; left: 0; z-index: 10; }
         
-        /* 완료 스타일 수정: 동그라미 제거 및 텍스트만 표시 */
+        /* 완료 스타일: 텍스트만 깔끔하게 표시 */
         .cell-done { background: #d4edda; color: #155724; font-weight: bold; }
         .cell-empty { background: #fff5f5; color: #e03131; font-size: 11px; }
         
@@ -60,7 +61,7 @@
             <select id="monthSelect" onchange="renderDashboard()"></select>
         </div>
 
-        <button onclick="fetchData()">🔄 새로고침</button>
+        <button onclick="fetchData()">🔄 데이터 새로고침</button>
     </div>
 
     <div class="table-wrapper">
@@ -72,20 +73,32 @@
 </div>
 
 <script>
+    // 배포한 현황판용 GAS 웹 앱 URL을 입력하세요.
     const DASHBOARD_GAS_URL = "https://script.google.com/macros/s/AKfycby8aZm5SP4y55lI7vkIY7Y_e3ybYLQ7-HM1Wgoid9rnzxfJLFLWdo2M4lpDm7mk9l2EfQ/exec";
     
+    // 장비 리스트 (실온 -> 실내온도로 수정)
     const devices = {
-        "병동약국": ["냉장고1", "냉장고2", "냉장고3", "냉장고4", "냉장고5", "냉장고6", "냉장고7", "냉장고8", "냉동고1", "실온1", "실온2", "실온3", "실온4"],
-        "외래약국": ["냉장고1", "실온1"],
-        "항암조제실": ["냉장고1", "실온1"]
+        "병동약국": ["냉장고1", "냉장고2", "냉장고3", "냉장고4", "냉장고5", "냉장고6", "냉장고7", "냉장고8", "냉동고1", "실내온도1", "실내온도2", "실내온도3", "실내온도4"],
+        "외래약국": ["냉장고1", "실내온도1"],
+        "항암조제실": ["냉장고1", "실내온도1"]
     };
 
     let rawData = [];
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         const yearSelect = document.getElementById('yearSelect');
         const monthSelect = document.getElementById('monthSelect');
+        const roomSelect = document.getElementById('roomSelect');
         const now = new Date();
+        
+        // 1. URL 파라미터를 통한 조제실 자동 선택
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomParam = urlParams.get('room');
+        if (roomParam && devices[roomParam]) {
+            roomSelect.value = roomParam;
+        }
+
+        // 2. 년도 및 월 선택 옵션 생성 (현재 날짜 기준)
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
 
@@ -103,7 +116,8 @@
             monthSelect.appendChild(opt);
         }
 
-        fetchData();
+        // 3. 서버 데이터 호출
+        await fetchData();
     });
 
     async function fetchData() {
@@ -111,7 +125,9 @@
             const response = await fetch(DASHBOARD_GAS_URL);
             rawData = await response.json(); 
             renderDashboard();
-        } catch (e) { console.error("데이터 로드 실패", e); }
+        } catch (e) {
+            console.error("데이터 로드 실패", e);
+        }
     }
 
     function renderDashboard() {
@@ -122,15 +138,17 @@
         const head = document.getElementById('tableHead');
         const body = document.getElementById('tableBody');
         
-        // 헤더 생성
+        if (!roomDevices) return;
+
+        // 테이블 헤더 생성 (장비명 및 오전/오후)
         let htmlHead = `<tr><th rowspan="2" class="date-col">날짜</th>`;
-        roomDevices.forEach(d => htmlHead += `<th colspan="2" style="width: 100px;">${d}</th>`);
+        roomDevices.forEach(d => htmlHead += `<th colspan="2" style="width: 110px;">${d}</th>`);
         htmlHead += `</tr><tr>`;
         roomDevices.forEach(() => htmlHead += `<th class="sub-header">오전</th><th class="sub-header">오후</th>`);
         htmlHead += `</tr>`;
         head.innerHTML = htmlHead;
 
-        // 날짜 행 생성 (정순 정렬)
+        // 해당 월의 1일부터 말일까지 행 생성 (정순)
         let htmlBody = "";
         const lastDay = new Date(year, month, 0).getDate();
 
@@ -140,9 +158,10 @@
             
             roomDevices.forEach(dev => {
                 ["오전", "오후"].forEach(time => {
+                    // 서버 데이터(rawData) 내 일치 여부 확인
                     const isDone = rawData.includes(`${room}|${dev}|${time}|${dateStr}`); 
                     const cellClass = isDone ? "cell-done" : "cell-empty";
-                    const cellText = isDone ? "완료" : "미점검"; // 초록 동그라미 제거
+                    const cellText = isDone ? "완료" : "미점검"; 
                     htmlBody += `<td class="${cellClass}">${cellText}</td>`;
                 });
             });
