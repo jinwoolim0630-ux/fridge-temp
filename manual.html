@@ -17,13 +17,15 @@
         .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         
         /* 장비 카드 기본 스타일 */
-        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; }
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; transition: 0.2s; }
         
-        /* 점검 완료 시 스타일 (초록색) */
+        /* 점검 완료 시 스타일 (초록색 및 클릭 불가 시각화) */
         .device-card.completed {
             background: #28a745 !important;
             color: white !important;
             border-color: #1e7e34 !important;
+            cursor: default !important; /* 마우스 커서를 기본으로 변경 */
+            opacity: 0.9;
         }
         .device-card.completed::after {
             content: " (점검완료)";
@@ -98,29 +100,25 @@
     let completedItems = []; // 서버에서 받아온 오늘 완료 목록
 
     document.addEventListener('DOMContentLoaded', async () => {
-        // 1. URL 파라미터 확인 및 조제실 자동 선택
         const urlParams = new URLSearchParams(window.location.search);
         const roomParam = urlParams.get('room');
         if (roomParam && devices[roomParam]) {
             document.getElementById('roomSelect').value = roomParam;
         }
 
-        // 2. 현재 시간 확인 및 오전/오후 자동 선택 (12시 기준)
         const currentHour = new Date().getHours();
         document.getElementById('checkTime').value = (currentHour < 12) ? "오전" : "오후";
 
-        // 3. 기존 사용자 이름 불러오기
         const savedName = localStorage.getItem('hospital_user_name');
         if (savedName) document.getElementById('userName').value = savedName;
         
-        // 4. 상태 새로고침 및 리스트 갱신
         await fetchStatus();
     });
 
     async function fetchStatus() {
         try {
             const response = await fetch(GAS_URL);
-            completedItems = await response.json(); // ["조제실|장비|회차", ...] 형태
+            completedItems = await response.json(); 
             updateDeviceList();
         } catch (e) {
             console.error("데이터 동기화 실패", e);
@@ -149,10 +147,20 @@
                 
                 // 오늘 이 회차에 점검 기록이 있는지 확인
                 const isDone = completedItems.includes(`${room}|${dev}|${checkTime}`);
-                if (isDone) card.classList.add('completed');
                 
-                card.innerText = dev;
-                card.onclick = () => startScan(dev);
+                if (isDone) {
+                    // 점검 완료된 경우: 초록색 클래스 추가 및 클릭 시 알림만 표시
+                    card.classList.add('completed');
+                    card.innerText = dev;
+                    card.onclick = () => {
+                        alert(`[${dev}] 항목은 이미 ${checkTime} 점검이 완료되어 수정할 수 없습니다.`);
+                    };
+                } else {
+                    // 점검 전인 경우: 클릭 시 정상적으로 스캔 시작
+                    card.innerText = dev;
+                    card.onclick = () => startScan(dev);
+                }
+                
                 grid.appendChild(card);
             });
         }
