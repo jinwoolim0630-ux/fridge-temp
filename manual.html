@@ -2,80 +2,239 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>온도 점검 실시간 현황판</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>온도 점검 시스템</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; padding: 15px; background: #f0f2f5; }
-        .table-wrapper { overflow: auto; border: 1px solid #e9ecef; max-height: 75vh; border-radius: 8px; }
-        table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1200px; }
-        th, td { border: 1px solid #e9ecef; padding: 8px; text-align: center; font-size: 12px; }
+        body { font-family: -apple-system, sans-serif; margin: 0; padding: 15px; background: #f4f7f6; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-top: 0; border-bottom: 3px solid #007bff; padding-bottom: 10px; }
+        .label { font-size: 14px; color: #666; margin: 15px 0 5px; font-weight: bold; }
+        input, button, select { width: 100%; padding: 15px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        .btn-secondary { background: #6c757d; margin-top: 10px; }
+        .hidden { display: none !important; }
+        .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         
-        /* 헤더 고정 로직 */
-        .main-header th { position: sticky; top: 0; z-index: 30; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
-        .sub-header-row th { position: sticky; top: 33px; z-index: 25; background: #f1f3f5; font-size: 10px; }
-        .date-col { position: sticky; left: 0; z-index: 40; background: #f1f3f5; font-weight: bold; border-right: 2px solid #dee2e6; }
-        thead tr:first-child th:first-child { z-index: 50; }
+        /* 기본 카드 */
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; transition: 0.2s; }
+        
+        /* 정상 점검 완료 (초록색) */
+        .device-card.completed { background: #28a745 !important; color: white !important; border-color: #1e7e34 !important; cursor: default !important; }
+        /* 온도 이상 발생 (빨간색) */
+        .device-card.warning { background: #dc3545 !important; color: white !important; border-color: #bd2130 !important; cursor: default !important; }
 
-        .temp-normal { background: #d4edda; color: #155724; font-weight: bold; }
-        .temp-error { background: #f8d7da; color: #721c24; font-weight: bold; }
+        .device-card.completed::after { content: " (정상완료)"; display: block; font-size: 10px; margin-top: 4px; font-weight: normal; }
+        .device-card.warning::after { content: " (온도이상)"; display: block; font-size: 10px; margin-top: 4px; font-weight: normal; }
+
+        .section-title { grid-column: span 2; background: #e9ecef; padding: 5px; font-size: 13px; color: #495057; border-radius: 4px; margin-top: 10px; }
+        #reader { width: 100%; border-radius: 10px; background: #000; overflow: hidden; margin-top: 10px; }
+        .status-box { background: #eef7ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-weight: bold; border: 1px dashed #007bff; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <select id="roomSelect" onchange="renderDashboard()">
-            <option value="병동약국">병동약국</option>
-        </select>
-        <div class="table-wrapper">
-            <table>
-                <thead id="tableHead"></thead>
-                <tbody id="tableBody"></tbody>
-            </table>
+
+<div class="container">
+    <h2>온도 점검 관리</h2>
+
+    <div id="step-1">
+        <div class="label">점검자 성함</div>
+        <input type="text" id="userName" placeholder="이름을 입력하세요">
+        
+        <div class="label">점검 회차 및 장소</div>
+        <div style="display: flex; gap: 5px;">
+            <select id="checkTime" onchange="updateDeviceList()">
+                <option value="오전">오전</option>
+                <option value="오후">오후</option>
+            </select>
+            <select id="roomSelect" onchange="updateDeviceList()">
+                <option value="병동약국">병동약국</option>
+                <option value="외래약국">외래약국</option>
+                <option value="항암조제실">항암조제실</option>
+            </select>
         </div>
+
+        <div id="device-grid" class="device-grid"></div>
+        <button class="btn-secondary" style="margin-top:20px;" onclick="fetchStatus()">🔄 데이터 새로고침</button>
     </div>
+
+    <div id="step-2" class="hidden">
+        <div class="status-box">대상: <span id="selected-info"></span></div>
+        <div id="reader"></div>
+        <button class="btn-secondary" onclick="backToStep1()">취소하고 돌아가기</button>
+    </div>
+
+    <div id="step-3" class="hidden">
+        <div class="status-box">✅ 인증 성공: <span id="selected-info-final"></span></div>
+        <div id="range-info" style="color: #007bff; font-size: 13px; text-align: center; margin-bottom: 10px; font-weight: bold;"></div>
+        <div class="label">현재 온도 (℃)</div>
+        <input type="number" id="tempValue" step="0.1" inputmode="decimal" placeholder="0.0">
+        <button id="submitBtn" onclick="submitData()">데이터 저장 완료</button>
+        <button class="btn-secondary" onclick="backToStep1()">취소</button>
+    </div>
+</div>
+
 <script>
-    const DASHBOARD_GAS_URL = "본인의_GAS_URL_입력";
-    const devices = { "병동약국": ["냉장고1", "냉장고2", "냉장고3", "실내온도1"] };
-    let rawData = [];
+    // [필독] 새 배포 후 생성된 URL을 여기에 넣으세요.
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyJ9_7wzZUraQQQoZYgjjKxKNapQMQmRWRmR0OFPVj81PXNAb37pbuzessSAdyvm7goiQ/exec";
+    
+    const devices = {
+        "병동약국": {
+            "냉장/냉동고": ["냉장고1", "냉장고2", "냉장고3", "냉장고4", "냉장고5", "냉장고6", "냉장고7", "냉장고8", "냉동고1"],
+            "실내온도": ["실내온도1", "실내온도2", "실내온도3", "실내온도4"]
+        },
+        "외래약국": { "장비": ["냉장고1", "실내온도1"] },
+        "항암조제실": { "장비": ["냉장고1", "냉장고2", "냉장고3", "실내온도1"] }
+    };
 
-    async function fetchData() {
-        const response = await fetch(DASHBOARD_GAS_URL);
-        rawData = await response.json();
-        renderDashboard();
+    const tempRanges = {
+        "냉장": { min: 2.0, max: 8.0 },
+        "냉동": { min: -50.0, max: -15.0 },
+        "실내": { min: 18.0, max: 28.0 }
+    };
+
+    let selectedRoom = "", selectedDevice = "", html5QrCode;
+    let completedItems = []; 
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const savedName = localStorage.getItem('hospital_user_name');
+        if (savedName) document.getElementById('userName').value = savedName;
+        const currentHour = new Date().getHours();
+        document.getElementById('checkTime').value = (currentHour < 12) ? "오전" : "오후";
+        await fetchStatus();
+    });
+
+    function getRangeForDevice(devName) {
+        if (devName.includes("냉장")) return tempRanges["냉장"];
+        if (devName.includes("냉동")) return tempRanges["냉동"];
+        if (devName.includes("실내")) return tempRanges["실내"];
+        return { min: -99, max: 99 };
     }
 
-    function renderDashboard() {
-        const room = document.getElementById('roomSelect').value;
-        const roomDevices = devices[room];
-        const head = document.getElementById('tableHead');
-        const body = document.getElementById('tableBody');
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth() + 1;
-
-        let htmlHead = `<tr class="main-header"><th rowspan="2" class="date-col">날짜</th>`;
-        roomDevices.forEach(d => htmlHead += `<th colspan="2">${d}</th>`);
-        htmlHead += `</tr><tr class="sub-header-row">`;
-        roomDevices.forEach(() => htmlHead += `<th>오전</th><th>오후</th>`);
-        htmlHead += `</tr>`;
-        head.innerHTML = htmlHead;
-
-        let htmlBody = "";
-        const lastDay = new Date(year, month, 0).getDate();
-        for (let d = 1; d <= lastDay; d++) {
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            htmlBody += `<tr><td class="date-col">${dateStr}</td>`;
-            roomDevices.forEach(dev => {
-                ["오전", "오후"].forEach(time => {
-                    const entry = rawData.find(r => r.date === dateStr && r.room === room && r.device === dev && r.time === time);
-                    const cellClass = entry ? (entry.status === "ERROR" ? "temp-error" : "temp-normal") : "";
-                    const cellValue = entry ? entry.temp.toFixed(1) : "";
-                    htmlBody += `<td class="${cellClass}">${cellValue}</td>`;
-                });
-            });
-            htmlBody += `</tr>`;
+    async function fetchStatus() {
+        try {
+            const response = await fetch(GAS_URL);
+            completedItems = await response.json(); 
+            updateDeviceList();
+        } catch (e) {
+            console.error("데이터 동기화 실패", e);
+            updateDeviceList();
         }
-        body.innerHTML = htmlBody;
     }
-    window.onload = fetchData;
+
+    function updateDeviceList() {
+        const room = document.getElementById('roomSelect').value;
+        const grid = document.getElementById('device-grid');
+        const checkTime = document.getElementById('checkTime').value;
+        if (!room) return;
+        selectedRoom = room; grid.innerHTML = "";
+        
+        for (const category in devices[room]) {
+            const title = document.createElement('div');
+            title.className = 'section-title'; title.innerText = `● ${category}`;
+            grid.appendChild(title);
+            
+            devices[room][category].forEach(dev => {
+                const card = document.createElement('div');
+                card.className = 'device-card';
+                
+                // 공백 제거 및 대문자화하여 정확한 매칭 키 생성
+                const matchKey = `${room}|${dev}|${checkTime}`.replace(/\s/g, '').toUpperCase();
+                
+                // 서버 데이터(completedItems)는 "장소|장비|회차|상태" 형식임
+                const foundEntry = completedItems.find(item => 
+                    item.replace(/\s/g, '').toUpperCase().startsWith(matchKey)
+                );
+
+                if (foundEntry) {
+                    const status = foundEntry.split('|').pop().toUpperCase();
+                    if (status === "ERROR") {
+                        card.classList.add('warning'); // 빨간색
+                        card.onclick = () => alert(`[${dev}] 항목은 이미 온도 이상으로 점검이 완료되었습니다.`);
+                    } else {
+                        card.classList.add('completed'); // 초록색
+                        card.onclick = () => alert(`[${dev}] 항목은 이미 정상적으로 점검이 완료되었습니다.`);
+                    }
+                } else {
+                    card.onclick = () => startScan(dev);
+                }
+                card.innerText = dev;
+                grid.appendChild(card);
+            });
+        }
+    }
+
+    function startScan(device) {
+        const user = document.getElementById('userName').value.trim();
+        if (!user) return alert("성함을 입력해주세요.");
+        localStorage.setItem('hospital_user_name', user);
+        
+        selectedDevice = device;
+        const range = getRangeForDevice(device);
+        document.getElementById('range-info').innerText = `※ 권장 범위: ${range.min}℃ ~ ${range.max}℃`;
+        
+        document.getElementById('step-1').classList.add('hidden');
+        document.getElementById('step-2').classList.remove('hidden');
+        document.getElementById('selected-info').innerText = device;
+        
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+            if (decodedText.trim() === `${selectedRoom}|${selectedDevice}`) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('step-2').classList.add('hidden');
+                    document.getElementById('step-3').classList.remove('hidden');
+                    document.getElementById('selected-info-final').innerText = selectedDevice;
+                });
+            } else {
+                alert("QR 코드가 일치하지 않습니다.\n스캔된 값: " + decodedText);
+            }
+        }).catch(() => alert("카메라를 실행할 수 없습니다."));
+    }
+
+    async function submitData() {
+        const tempVal = document.getElementById('tempValue').value;
+        const temp = parseFloat(tempVal);
+        const checkTime = document.getElementById('checkTime').value;
+        const user = document.getElementById('userName').value;
+        
+        if (isNaN(temp)) return alert("온도를 입력하세요.");
+
+        const range = getRangeForDevice(selectedDevice);
+        let status = "NORMAL";
+        if (temp < range.min || temp > range.max) {
+            status = "ERROR";
+            if (!confirm(`⚠️ 입력하신 온도(${temp}℃)가 정상 범위를 벗어납니다.\n그대로 저장할까요?`)) return;
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true; btn.innerText = "저장 중...";
+
+        try {
+            // GAS로 데이터 전송 (status 포함)
+            await fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ user, room: selectedRoom, device: selectedDevice, temp, checkTime, status })
+            });
+            
+            alert(status === "ERROR" ? "⚠️ 온도 이상 데이터가 저장되었습니다." : "정상 저장 완료!");
+            
+            // 저장이 끝나면 페이지를 새로고침하여 상태를 즉시 반영(중복 클릭 차단)
+            location.reload(); 
+        } catch (e) {
+            alert("전송 중 오류가 발생했습니다.");
+            btn.disabled = false;
+            btn.innerText = "데이터 저장 완료";
+        }
+    }
+
+    function backToStep1() {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => location.reload());
+        } else {
+            location.reload();
+        }
+    }
 </script>
 </body>
 </html>
