@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>온도 점검 시스템 (실시간 동기화)</title>
+    <title>온도 점검 시스템</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; margin: 0; padding: 15px; background: #f4f7f6; }
@@ -16,26 +16,14 @@
         .hidden { display: none !important; }
         .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         
-        /* 장비 카드 기본 스타일 */
-        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; transition: 0.2s; }
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; }
         
         /* 정상 점검 완료 (초록색) */
-        .device-card.completed {
-            background: #28a745 !important;
-            color: white !important;
-            border-color: #1e7e34 !important;
-            cursor: default !important;
-        }
-
+        .device-card.completed { background: #28a745 !important; color: white !important; border-color: #1e7e34 !important; cursor: default !important; }
         /* 온도 이상 발생 (빨간색) */
-        .device-card.warning {
-            background: #dc3545 !important;
-            color: white !important;
-            border-color: #bd2130 !important;
-            cursor: default !important;
-        }
+        .device-card.warning { background: #dc3545 !important; color: white !important; border-color: #bd2130 !important; cursor: default !important; }
 
-        .device-card.completed::after { content: " (정상)"; display: block; font-size: 10px; margin-top: 4px; }
+        .device-card.completed::after { content: " (정상완료)"; display: block; font-size: 10px; margin-top: 4px; }
         .device-card.warning::after { content: " (온도이상)"; display: block; font-size: 10px; margin-top: 4px; }
 
         .section-title { grid-column: span 2; background: #e9ecef; padding: 5px; font-size: 13px; color: #495057; border-radius: 4px; margin-top: 10px; }
@@ -65,10 +53,7 @@
             <option value="항암조제실">항암조제실</option>
         </select>
 
-        <div id="device-list-area">
-            <div id="device-grid" class="device-grid"></div>
-        </div>
-        
+        <div id="device-grid" class="device-grid"></div>
         <button class="btn-secondary" style="margin-top:20px;" onclick="fetchStatus()">🔄 상태 새로고침</button>
     </div>
 
@@ -89,7 +74,8 @@
 </div>
 
 <script>
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbzIpYi07AI8n9rt3kgWjPVJuVT213-_ZT1zjelqn_MNSwC21zWb144PVc2eXKKkNqW-Rg/exec";
+    // 배포한 새 GAS URL을 여기에 입력하세요
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbxnJSIXScTt-PrsgS5ajo12jXxk2nraLxC2Dn37DK2JaQKfGZPpGYj1A7fSonZPry9jtA/exec";
     
     const devices = {
         "병동약국": {
@@ -100,7 +86,6 @@
         "항암조제실": { "장비": ["냉장고1", "실내온도1"] }
     };
 
-    // 장비 타입별 온도 범위 설정
     const tempRanges = {
         "냉장": { min: 2.0, max: 8.0 },
         "냉동": { min: -50.0, max: -15.0 },
@@ -108,7 +93,7 @@
     };
 
     let selectedRoom = "", selectedDevice = "", html5QrCode;
-    let completedItems = []; // 서버에서 받아온 ["조제실|장비|회차|상태", ...] 형태
+    let completedItems = []; 
 
     document.addEventListener('DOMContentLoaded', async () => {
         const savedName = localStorage.getItem('hospital_user_name');
@@ -118,12 +103,11 @@
         await fetchStatus();
     });
 
-    // 장비 이름으로 범위를 찾는 함수
     function getRangeForDevice(devName) {
         if (devName.includes("냉장")) return tempRanges["냉장"];
         if (devName.includes("냉동")) return tempRanges["냉동"];
         if (devName.includes("실내")) return tempRanges["실내"];
-        return { min: -99, max: 99 }; // 기본값
+        return { min: -99, max: 99 };
     }
 
     async function fetchStatus() {
@@ -132,6 +116,7 @@
             completedItems = await response.json(); 
             updateDeviceList();
         } catch (e) {
+            console.error("동기화 실패", e);
             updateDeviceList();
         }
     }
@@ -140,35 +125,38 @@
         const room = document.getElementById('roomSelect').value;
         const grid = document.getElementById('device-grid');
         const checkTime = document.getElementById('checkTime').value;
-
-        if (!room) { grid.innerHTML = ""; return; }
+        if (!room) return;
         selectedRoom = room; grid.innerHTML = "";
         
-        const roomData = devices[room];
-        for (const category in roomData) {
+        for (const category in devices[room]) {
             const title = document.createElement('div');
-            title.className = 'section-title';
-            title.innerText = `● ${category}`;
+            title.className = 'section-title'; title.innerText = `● ${category}`;
             grid.appendChild(title);
             
-            roomData[category].forEach(dev => {
+            devices[room][category].forEach(dev => {
                 const card = document.createElement('div');
                 card.className = 'device-card';
                 
-                // 완료 여부 및 상태 확인 ("장소|장비|회차|NORMAL" 또는 "장소|장비|회차|ERROR")
-                const statusNormal = completedItems.includes(`${room}|${dev}|${checkTime}|NORMAL`);
-                const statusError = completedItems.includes(`${room}|${dev}|${checkTime}|ERROR`);
+                // 매칭 키 생성 (공백 제거)
+                const matchKey = `${room}|${dev}|${checkTime}`.replace(/\s/g, '').toUpperCase();
+                
+                // 서버 데이터에서 매칭되는 항목 찾기
+                const foundEntry = completedItems.find(item => 
+                    item.replace(/\s/g, '').toUpperCase().startsWith(matchKey)
+                );
 
-                if (statusNormal) {
-                    card.classList.add('completed');
-                    card.onclick = () => alert("정상 점검 완료된 항목입니다.");
-                } else if (statusError) {
-                    card.classList.add('warning');
-                    card.onclick = () => alert("온도 이상이 기록된 항목입니다.");
+                if (foundEntry) {
+                    const status = foundEntry.split('|').pop().toUpperCase();
+                    if (status === "ERROR") {
+                        card.classList.add('warning'); // 빨간색
+                        card.onclick = () => alert(`[${dev}] 이미 온도 이상으로 점검이 완료되었습니다.`);
+                    } else {
+                        card.classList.add('completed'); // 초록색
+                        card.onclick = () => alert(`[${dev}] 이미 정상 점검이 완료되었습니다.`);
+                    }
                 } else {
                     card.onclick = () => startScan(dev);
                 }
-                
                 card.innerText = dev;
                 grid.appendChild(card);
             });
@@ -177,7 +165,7 @@
 
     function startScan(device) {
         const user = document.getElementById('userName').value.trim();
-        if (!user) { alert("성함을 입력해주세요."); return; }
+        if (!user) return alert("성함을 입력해주세요.");
         localStorage.setItem('hospital_user_name', user);
         
         selectedDevice = device;
@@ -207,46 +195,32 @@
         const user = document.getElementById('userName').value;
         const btn = document.getElementById('submitBtn');
 
-        if (isNaN(temp)) { alert("온도를 입력하세요."); return; }
+        if (isNaN(temp)) return alert("온도를 입력하세요.");
 
-        // 온도 범위 체크
         const range = getRangeForDevice(selectedDevice);
         let status = "NORMAL";
         if (temp < range.min || temp > range.max) {
             status = "ERROR";
-            if (!confirm(`⚠️ 입력하신 온도(${temp}℃)가 정상 범위(${range.min}~${range.max})를 벗어납니다. 그대로 저장할까요?`)) {
-                return;
-            }
+            if (!confirm(`⚠️ 입력하신 온도(${temp}℃)가 정상 범위를 벗어납니다. 그대로 저장할까요?`)) return;
         }
 
-        btn.disabled = true;
-        btn.innerText = "저장 중...";
-
-        const payload = { user, room: selectedRoom, device: selectedDevice, temp, checkTime, status };
+        btn.disabled = true; btn.innerText = "저장 중...";
 
         try {
             await fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ user, room: selectedRoom, device: selectedDevice, temp, checkTime, status })
             });
-
-            completedItems.push(`${selectedRoom}|${selectedDevice}|${checkTime}|${status}`);
-            alert(status === "ERROR" ? "⚠️ 온도 이상 데이터가 저장되었습니다." : "정상 저장 완료!");
-            
-            btn.disabled = false;
-            btn.innerText = "데이터 저장 완료";
-            location.reload(); // 리스트 갱신을 위해 페이지 새로고침
+            alert(status === "ERROR" ? "⚠️ 온도 이상으로 저장되었습니다." : "저장 완료!");
+            location.reload(); // 저장 후 즉시 새로고침하여 상태 반영 (클릭 차단 활성화)
         } catch (e) {
             alert("전송 오류");
             btn.disabled = false;
         }
     }
 
-    function backToStep1() {
-        if (html5QrCode && html5QrCode.isScanning) { html5QrCode.stop(); }
-        location.reload();
-    }
+    function backToStep1() { location.reload(); }
 </script>
 </body>
 </html>
