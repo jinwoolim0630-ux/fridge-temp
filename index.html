@@ -1,111 +1,98 @@
 <!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>병원 온도 점검 시스템</title>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: -apple-system, sans-serif; margin: 0; padding: 20px; background: #f4f7f6; }
-        .container { max-width: 500px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #333; margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
-        .label { font-size: 14px; color: #666; margin-bottom: 5px; font-weight: bold; }
-        input, button, select { width: 100%; padding: 15px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #ccc; }
-        .info-box { background: #eef7ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #007bff; }
-        #status-msg { text-align: center; font-weight: bold; margin-top: 10px; color: #007bff; }
+      body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: #f8f9fa; color: #333; }
+      .container { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+      h2 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+      .input-group { margin-bottom: 15px; }
+      label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+      input { width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+      button { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 18px; font-weight: bold; transition: 0.3s; }
+      button:hover { background-color: #0056b3; }
+      #status { margin-top: 15px; text-align: center; font-weight: bold; }
+      .log-table { width: 100%; margin-top: 30px; border-collapse: collapse; font-size: 12px; }
+      .log-table th, .log-table td { border: 1px solid #dee2e6; padding: 8px; text-align: center; }
+      .log-table th { background-color: #e9ecef; }
     </style>
-</head>
-<body>
+  </head>
+  <body>
+    <div class="container">
+      <h2>항암조제실 일일 온도 점검</h2>
+      <form id="tempForm">
+        <div class="input-group">
+          <label>장비명</label>
+          <input type="text" name="deviceName" placeholder="장비 이름을 입력하세요" required>
+        </div>
+        <div class="input-group">
+          <label>현재 온도 (℃)</label>
+          <input type="number" step="0.1" name="currentTemp" required>
+        </div>
+        <div class="input-group">
+          <label>최저 온도 (℃)</label>
+          <input type="number" step="0.1" name="minTemp" required>
+        </div>
+        <div class="input-group">
+          <label>최고 온도 (℃)</label>
+          <input type="number" step="0.1" name="maxTemp" required>
+        </div>
+        <div class="input-group">
+          <label>점검자명</label>
+          <input type="text" name="checker" required>
+        </div>
+        <button type="button" onclick="submitData()">기록하기</button>
+      </form>
+      <div id="status"></div>
 
-<div class="container">
-    <h2>온도 점검 시스템</h2>
-
-    <div class="info-box">
-        <div>📍 <b>위치:</b> <span id="display-room">-</span></div>
-        <div>❄️ <b>장비:</b> <span id="display-device">-</span></div>
+      <h3 style="margin-top:40px; font-size:16px;">최근 기록 (5건)</h3>
+      <table class="log-table" id="logTable">
+        <thead>
+          <tr>
+            <th>날짜</th><th>장비</th><th>현재</th><th>최저</th><th>최고</th><th>점검자</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
     </div>
 
-    <div class="label">점검자 성함</div>
-    <input type="text" id="userName" placeholder="이름을 입력하세요">
+    <script>
+      // 페이지 로드 시 최근 기록 불러오기
+      window.onload = loadLogs;
 
-    <div class="label">점검 회차</div>
-    <select id="checkTime">
-        <option value="오전">오전 점검</option>
-        <option value="오후">오후 점검</option>
-    </select>
+      function loadLogs() {
+        google.script.run.withSuccessHandler(function(data) {
+          const tbody = document.getElementById('logBody');
+          tbody.innerHTML = "";
+          data.reverse().forEach(row => {
+            const tr = document.createElement('tr');
+            // 시트 열: [날짜(0), 시간(1), 조제실(2), 장비명(3), 현재(4), 최저(5), 최고(6), 점검자(7)]
+            tr.innerHTML = `<td>${row[0].toString().split('T')[0]}</td><td>${row[3]}</td><td>${row[4]}</td><td>${row[5]}</td><td>${row[6]}</td><td>${row[7]}</td>`;
+            tbody.appendChild(tr);
+          });
+        }).getLastLogs();
+      }
 
-    <div class="label">현재 온도 (℃)</div>
-    <input type="number" id="tempValue" step="0.1" inputmode="decimal" placeholder="예: 4.5">
-
-    <button id="submitBtn" onclick="submitData()">데이터 저장하기</button>
-    <div id="status-msg"></div>
-</div>
-
-<script>
-    // [중요] 본인의 구글 앱스크립트 '웹 앱 URL'을 여기에 꼭 넣으세요!
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwYpJ_AELXK_Tni7vOC5D9SRH98TNweFFT3oTUTrFlR241XMxbWb3bV0kPqgEgnHZ7y/exec";
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const room = urlParams.get('room');
-    const device = urlParams.get('device');
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const savedName = localStorage.getItem('hospital_user_name');
-        if (savedName) document.getElementById('userName').value = savedName;
-
-        if (room && device) {
-            document.getElementById('display-room').innerText = room;
-            document.getElementById('display-device').innerText = device;
-        } else {
-            alert("QR코드를 통해 접속해야 장비 정보가 인식됩니다.");
-        }
-    });
-
-    async function submitData() {
-        const user = document.getElementById('userName').value.trim();
-        const temp = document.getElementById('tempValue').value;
-        const checkTime = document.getElementById('checkTime').value;
-        const btn = document.getElementById('submitBtn');
-        const status = document.getElementById('status-msg');
-
-        if (!user || !temp || !room || !device) {
-            alert("모든 정보를 입력해주세요.");
-            return;
-        }
-
-        localStorage.setItem('hospital_user_name', user);
-        btn.disabled = true;
-        status.innerText = "전송 중입니다... 잠시만 기다려주세요.";
-
-        const payload = {
-            user: user,
-            room: room,
-            device: device,
-            temp: temp,
-            checkTime: checkTime
-        };
-
-        // 구글 앱스크립트로 데이터를 보낼 때 가장 안정적인 방식 (문자열 변환)
-        fetch(GAS_URL, {
-            method: 'POST',
-            mode: 'no-cors', // CORS 문제 해결을 위한 설정
-            headers: { 'Content-Type': 'application/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
-        })
-        .then(() => {
-            alert("✅ 전송 완료! 시트를 확인해보세요.");
-            document.getElementById('tempValue').value = "";
-            status.innerText = "";
-            btn.disabled = false;
-        })
-        .catch(err => {
-            alert("❌ 오류가 발생했습니다. 네트워크를 확인해주세요.");
-            console.error(err);
-            btn.disabled = false;
-            status.innerText = "";
-        });
-    }
-</script>
-</body>
+      function submitData() {
+        const form = document.getElementById('tempForm');
+        const status = document.getElementById('status');
+        status.innerText = "전송 중...";
+        status.style.color = "blue";
+        
+        google.script.run
+          .withSuccessHandler(function(response) {
+            status.innerText = response.message;
+            if(response.status === "success") {
+              status.style.color = "green";
+              form.reset();
+              loadLogs(); // 테이블 새로고침
+            } else {
+              status.style.color = "red";
+            }
+          })
+          .addTemperatureData(form);
+      }
+    </script>
+  </body>
 </html>
