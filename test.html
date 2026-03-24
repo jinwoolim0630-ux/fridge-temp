@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>통합 온도 점검 현황판</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; margin: 0; padding: 15px; background: #f0f2f5; }
+        .container { max-width: 100%; margin: 0 auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #1a1a1a; margin-bottom: 15px; font-size: 20px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; justify-content: center; align-items: center; flex-wrap: wrap; }
+        select, button { padding: 8px 12px; border-radius: 6px; border: 1px solid #ced4da; font-size: 14px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 12px; table-layout: fixed; }
+        th, td { border: 1px solid #dee2e6; padding: 8px 4px; text-align: center; overflow: hidden; }
+        th { background: #f8f9fa; color: #495057; font-weight: bold; }
+        .date-col { width: 100px; background: #f8f9fa; font-weight: bold; }
+        .temp-normal { background: #e7f5ff; color: #007bff; }
+        .temp-error { background: #fff5f5; color: #fa5252; font-weight: bold; }
+        .temp-empty { color: #dee2e6; }
+        .sub-header { font-size: 10px; background: #f1f3f5; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🌡️ 전 약국 온도점검 실시간 현황</h2>
+    
+    <div class="controls">
+        <select id="roomSelect" onchange="fetchData()">
+            <option value="병동약국">병동약국</option>
+            <option value="외래약국">외래약국</option>
+            <option value="항암조제실">항암조제실</option>
+        </select>
+        <select id="yearSelect"></select>
+        <select id="monthSelect"></select>
+        <button onclick="fetchData()">🔄 조회</button>
+    </div>
+
+    <table id="statusTable">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+</div>
+
+<script>
+    // [중요] 여기에 각각 배포한 URL을 넣으세요.
+    const DEFAULT_API = "기존_현황판_앱스크립트_URL";
+    const ONCO_API = "항암전용_현황판_앱스크립트_URL";
+
+    const devices = {
+        "병동약국": ["냉장고1", "냉장고2", "냉장고3", "냉장고4", "냉장고5", "냉장고6", "냉장고7", "냉장고8", "냉동고1", "실내온도1", "실내온도2", "실내온도3", "실내온도4"],
+        "외래약국": ["냉장고1", "실내온도1"],
+        "항암조제실": ["냉장고1", "냉장고2", "냉장고3", "실내온도1"]
+    };
+
+    let rawData = [];
+
+    window.onload = () => {
+        setupSelectors();
+        fetchData();
+    };
+
+    function setupSelectors() {
+        const now = new Date();
+        const yearSel = document.getElementById('yearSelect');
+        const monthSel = document.getElementById('monthSelect');
+        for(let i=0; i<3; i++) {
+            let y = now.getFullYear() - i;
+            yearSel.innerHTML += `<option value="${y}">${y}년</option>`;
+        }
+        for(let i=1; i<=12; i++) {
+            monthSel.innerHTML += `<option value="${i}" ${i === now.getMonth()+1 ? 'selected' : ''}>${i}월</option>`;
+        }
+    }
+
+    async function fetchData() {
+        const room = document.getElementById('roomSelect').value;
+        const targetUrl = (room === "항암조제실") ? ONCO_API : DEFAULT_API;
+        
+        try {
+            const response = await fetch(targetUrl);
+            rawData = await response.json();
+            renderDashboard();
+        } catch (e) { alert("데이터 로드 실패"); }
+    }
+
+    function renderDashboard() {
+        const room = document.getElementById('roomSelect').value;
+        const year = document.getElementById('yearSelect').value;
+        const month = document.getElementById('monthSelect').value;
+        const roomDevices = devices[room];
+        
+        // 헤더 생성
+        let htmlHead = `<tr><th rowspan="2" class="date-col">날짜</th>`;
+        roomDevices.forEach(d => htmlHead += `<th colspan="${room === '항암조제실' ? 1 : 2}">${d}</th>`);
+        htmlHead += `</tr><tr>`;
+        roomDevices.forEach(() => {
+            htmlHead += (room === '항암조제실') ? `<th class="sub-header">현/최저/최고</th>` : `<th class="sub-header">오전</th><th class="sub-header">오후</th>`;
+        });
+        htmlHead += `</tr>`;
+        document.getElementById('tableHead').innerHTML = htmlHead;
+
+        // 본문 생성
+        let htmlBody = "";
+        const daysInMonth = new Date(year, month, 0).getDate();
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            htmlBody += `<tr><td class="date-col">${day}일</td>`;
+            
+            roomDevices.forEach(dev => {
+                if (room === '항암조제실') {
+                    const entry = rawData.find(r => r.date === dateStr && r.device === dev);
+                    let val = "-", cls = "temp-empty";
+                    if(entry) {
+                        val = `${entry.cur}/${entry.min}/${entry.max}`;
+                        cls = entry.status === "ERROR" ? "temp-error" : "temp-normal";
+                    }
+                    htmlBody += `<td class="${cls}">${val}</td>`;
+                } else {
+                    ["오전", "오후"].forEach(time => {
+                        const entry = rawData.find(r => r.date === dateStr && r.device === dev && r.time === time);
+                        let val = "-", cls = "temp-empty";
+                        if(entry) {
+                            val = entry.temp.toFixed(1);
+                            cls = entry.status === "ERROR" ? "temp-error" : "temp-normal";
+                        }
+                        htmlBody += `<td class="${cls}">${val}</td>`;
+                    });
+                }
+            });
+            htmlBody += `</tr>`;
+        }
+        document.getElementById('tableBody').innerHTML = htmlBody;
+    }
+</script>
+</body>
+</html>
