@@ -1,98 +1,204 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>온도 점검 시스템</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-      body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: #f8f9fa; color: #333; }
-      .container { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-      h2 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
-      .input-group { margin-bottom: 15px; }
-      label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
-      input { width: 100%; padding: 12px; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-      button { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 18px; font-weight: bold; transition: 0.3s; }
-      button:hover { background-color: #0056b3; }
-      #status { margin-top: 15px; text-align: center; font-weight: bold; }
-      .log-table { width: 100%; margin-top: 30px; border-collapse: collapse; font-size: 12px; }
-      .log-table th, .log-table td { border: 1px solid #dee2e6; padding: 8px; text-align: center; }
-      .log-table th { background-color: #e9ecef; }
+        body { font-family: -apple-system, sans-serif; margin: 0; padding: 15px; background: #f4f7f6; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-top: 0; border-bottom: 3px solid #007bff; padding-bottom: 10px; }
+        .label { font-size: 14px; color: #666; margin: 15px 0 5px; font-weight: bold; }
+        input, button, select { width: 100%; padding: 15px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        .btn-secondary { background: #6c757d; margin-top: 10px; }
+        .hidden { display: none !important; }
+        .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .device-card { padding: 15px; border: 1px solid #007bff; border-radius: 8px; text-align: center; background: #fff; cursor: pointer; font-weight: bold; color: #007bff; }
+        .device-card.completed { background: #28a745; color: white; border-color: #1e7e34; }
+        .device-card.warning { background: #dc3545; color: white; border-color: #bd2130; }
+        .status-box { background: #eef7ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-weight: bold; border: 1px dashed #007bff; }
+        .step-indicator { text-align: center; font-size: 12px; color: #007bff; margin-bottom: 10px; font-weight: bold; }
     </style>
-  </head>
-  <body>
-    <div class="container">
-      <h2>항암조제실 일일 온도 점검</h2>
-      <form id="tempForm">
-        <div class="input-group">
-          <label>장비명</label>
-          <input type="text" name="deviceName" placeholder="장비 이름을 입력하세요" required>
-        </div>
-        <div class="input-group">
-          <label>현재 온도 (℃)</label>
-          <input type="number" step="0.1" name="currentTemp" required>
-        </div>
-        <div class="input-group">
-          <label>최저 온도 (℃)</label>
-          <input type="number" step="0.1" name="minTemp" required>
-        </div>
-        <div class="input-group">
-          <label>최고 온도 (℃)</label>
-          <input type="number" step="0.1" name="maxTemp" required>
-        </div>
-        <div class="input-group">
-          <label>점검자명</label>
-          <input type="text" name="checker" required>
-        </div>
-        <button type="button" onclick="submitData()">기록하기</button>
-      </form>
-      <div id="status"></div>
+</head>
+<body>
 
-      <h3 style="margin-top:40px; font-size:16px;">최근 기록 (5건)</h3>
-      <table class="log-table" id="logTable">
-        <thead>
-          <tr>
-            <th>날짜</th><th>장비</th><th>현재</th><th>최저</th><th>최고</th><th>점검자</th>
-          </tr>
-        </thead>
-        <tbody id="logBody"></tbody>
-      </table>
+<div class="container">
+    <h2 id="main-title">온도 점검 관리</h2>
+
+    <div id="step-1">
+        <div class="label">점검자 성함</div>
+        <input type="text" id="userName" placeholder="이름을 입력하세요">
+        
+        <div class="label">조제실 선택</div>
+        <select id="roomSelect" onchange="updateDeviceList()">
+            <option value="항암조제실">항암조제실</option>
+            <option value="외래약국">외래약국</option>
+        </select>
+
+        <div id="device-grid" class="device-grid"></div>
+        <button class="btn-secondary" style="margin-top:20px;" onclick="fetchStatus()">🔄 데이터 새로고침</button>
     </div>
 
-    <script>
-      // 페이지 로드 시 최근 기록 불러오기
-      window.onload = loadLogs;
+    <div id="step-2" class="hidden">
+        <div class="status-box">대상: <span id="selected-info"></span></div>
+        <div id="reader"></div>
+        <button class="btn-secondary" onclick="resetApp()">취소</button>
+    </div>
 
-      function loadLogs() {
-        google.script.run.withSuccessHandler(function(data) {
-          const tbody = document.getElementById('logBody');
-          tbody.innerHTML = "";
-          data.reverse().forEach(row => {
-            const tr = document.createElement('tr');
-            // 시트 열: [날짜(0), 시간(1), 조제실(2), 장비명(3), 현재(4), 최저(5), 최고(6), 점검자(7)]
-            tr.innerHTML = `<td>${row[0].toString().split('T')[0]}</td><td>${row[3]}</td><td>${row[4]}</td><td>${row[5]}</td><td>${row[6]}</td><td>${row[7]}</td>`;
-            tbody.appendChild(tr);
-          });
-        }).getLastLogs();
-      }
+    <div id="step-temp-current" class="hidden">
+        <div class="step-indicator">STEP 1/3</div>
+        <div class="status-box">🌡️ <span id="info-current"></span>: 현재온도</div>
+        <input type="number" id="currentTemp" step="0.1" inputmode="decimal" placeholder="현재 온도를 입력하세요">
+        <button onclick="nextStep('min')">다음 (최저온도 입력)</button>
+    </div>
 
-      function submitData() {
-        const form = document.getElementById('tempForm');
-        const status = document.getElementById('status');
-        status.innerText = "전송 중...";
-        status.style.color = "blue";
+    <div id="step-temp-min" class="hidden">
+        <div class="step-indicator">STEP 2/3</div>
+        <div class="status-box">❄️ <span id="info-min"></span>: 최저온도</div>
+        <input type="number" id="minTemp" step="0.1" inputmode="decimal" placeholder="최저 온도를 입력하세요">
+        <button onclick="nextStep('max')">다음 (최고온도 입력)</button>
+    </div>
+
+    <div id="step-temp-max" class="hidden">
+        <div class="step-indicator">STEP 3/3</div>
+        <div class="status-box">🔥 <span id="info-max"></span>: 최고온도</div>
+        <input type="number" id="maxTemp" step="0.1" inputmode="decimal" placeholder="최고 온도를 입력하세요">
+        <button id="submitBtn" onclick="submitData()">최종 데이터 저장</button>
+    </div>
+</div>
+
+<script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyJ9_7wzZUraQQQoZYgjjKxKNapQMQmRWRmR0OFPVj81PXNAb37pbuzessSAdyvm7goiQ/exec";
+    
+    const devices = {
+        "항암조제실": ["냉장고1", "냉장고2", "냉장고3", "실내온도1"],
+        "외래약국": ["냉장고1", "냉장고2", "실내온도1"]
+    };
+
+    const tempRanges = {
+        "냉장": { min: 2.0, max: 8.0 },
+        "실내": { min: 18.0, max: 28.0 }
+    };
+
+    let selectedRoom = "", selectedDevice = "", html5QrCode;
+    let completedItems = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedName = localStorage.getItem('hospital_user_name');
+        if (savedName) document.getElementById('userName').value = savedName;
+        fetchStatus();
+    });
+
+    async function fetchStatus() {
+        try {
+            const response = await fetch(GAS_URL);
+            completedItems = await response.json(); 
+            updateDeviceList();
+        } catch (e) { updateDeviceList(); }
+    }
+
+    function updateDeviceList() {
+        selectedRoom = document.getElementById('roomSelect').value;
+        const grid = document.getElementById('device-grid');
+        grid.innerHTML = "";
         
-        google.script.run
-          .withSuccessHandler(function(response) {
-            status.innerText = response.message;
-            if(response.status === "success") {
-              status.style.color = "green";
-              form.reset();
-              loadLogs(); // 테이블 새로고침
+        devices[selectedRoom].forEach(dev => {
+            const card = document.createElement('div');
+            card.className = 'device-card';
+            // 서버 매칭 키: 조제실|장비명|시간|상태 [cite: 8]
+            const isCompleted = completedItems.some(item => item.includes(`${selectedRoom}|${dev}`));
+            
+            if (isCompleted) {
+                card.classList.add('completed');
+                card.innerText = dev + " (완료)";
             } else {
-              status.style.color = "red";
+                card.onclick = () => startScan(dev);
+                card.innerText = dev;
             }
-          })
-          .addTemperatureData(form);
-      }
-    </script>
-  </body>
+            grid.appendChild(card);
+        });
+    }
+
+    function startScan(device) {
+        const user = document.getElementById('userName').value.trim();
+        if (!user) return alert("성함을 입력해주세요.");
+        localStorage.setItem('hospital_user_name', user);
+        
+        selectedDevice = device;
+        document.getElementById('step-1').classList.add('hidden');
+        document.getElementById('step-2').classList.remove('hidden');
+        document.getElementById('selected-info').innerText = device;
+        
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (decodedText) => {
+            if (decodedText.trim() === `${selectedRoom}|${selectedDevice}`) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('step-2').classList.add('hidden');
+                    document.getElementById('step-temp-current').classList.remove('hidden');
+                    document.getElementById('info-current').innerText = selectedDevice;
+                });
+            } else { alert("QR 코드가 일치하지 않습니다."); }
+        }).catch(() => alert("카메라 실행 오류"));
+    }
+
+    function nextStep(target) {
+        const currentVal = document.getElementById('currentTemp').value;
+        const minVal = document.getElementById('minTemp').value;
+        
+        if (target === 'min' && !currentVal) return alert("현재 온도를 입력하세요.");
+        if (target === 'max' && !minVal) return alert("최저 온도를 입력하세요.");
+
+        document.getElementById('step-temp-current').classList.add('hidden');
+        document.getElementById('step-temp-min').classList.add('hidden');
+        
+        if (target === 'min') {
+            document.getElementById('step-temp-min').classList.remove('hidden');
+            document.getElementById('info-min').innerText = selectedDevice;
+        } else {
+            document.getElementById('step-temp-max').classList.remove('hidden');
+            document.getElementById('info-max').innerText = selectedDevice;
+        }
+    }
+
+    async function submitData() {
+        const currentTemp = parseFloat(document.getElementById('currentTemp').value);
+        const minTemp = parseFloat(document.getElementById('minTemp').value);
+        const maxTemp = parseFloat(document.getElementById('maxTemp').value);
+        const user = document.getElementById('userName').value;
+
+        if (isNaN(maxTemp)) return alert("최고 온도를 입력하세요.");
+
+        const range = selectedDevice.includes("실내") ? tempRanges["실내"] : tempRanges["냉장"];
+        let status = "NORMAL";
+        
+        if ([currentTemp, minTemp, maxTemp].some(t => t < range.min || t > range.max)) {
+            status = "ERROR";
+            if (!confirm("⚠️ 범위를 벗어난 온도가 있습니다. 저장할까요?")) return;
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true; btn.innerText = "전송 중...";
+
+        try {
+            await fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ 
+                    user, room: selectedRoom, device: selectedDevice, 
+                    currentTemp, minTemp, maxTemp, status 
+                })
+            });
+            alert("기록 완료!");
+            location.reload();
+        } catch (e) {
+            alert("전송 실패");
+            btn.disabled = false;
+        }
+    }
+
+    function resetApp() { location.reload(); }
+</script>
+</body>
 </html>
